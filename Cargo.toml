@@ -1,0 +1,14 @@
+[workspace]
+
+members = [
+    "wayk_proto",
+    "wayk_proto_derive",
+    "wayk_cli_client"
+]
+
+[profile.release]
+# This makes the compiled code faster and smaller, but it makes compiling slower,
+# so it's only enabled in release mode.
+lto = true
+# Disable parallel code generation but allow more optimizations.
+codegen-units = 1

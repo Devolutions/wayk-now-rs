@@ -1,0 +1,16 @@
+[package]
+name = "wayk_cli_client"
+keywords = ["wayk", "client", "cli"]
+description = "WaykNow CLI client"
+version = "0.1.0"
+authors = ["Benoît CORTIER <benoit.cortier@fried-world.eu>"]
+edition = "2018"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Devolutions/wayk-now-rs"
+
+[dependencies]
+wayk_proto = { version = "0.1", path = "../wayk_proto" }
+structopt = "0.3"
+log = "0.4"
+simplelog = "0.7"

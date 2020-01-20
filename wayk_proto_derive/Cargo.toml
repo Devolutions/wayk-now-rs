@@ -1,0 +1,18 @@
+[package]
+name = "wayk_proto_derive"
+version = "0.1.0"
+description = "derive macros for Encode and Decode traits from wayk_proto"
+authors = ["Benoît CORTIER <benoit.cortier@fried-world.eu>"]
+edition = "2018"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Devolutions/wayk-now-rs"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "1.0", default-features = false }
+syn = "1.0"
+quote = "1.0"
+
