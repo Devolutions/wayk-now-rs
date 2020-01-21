@@ -1,5 +1,6 @@
 [package]
 name = "wayk_core"
+description = "Provides data structures and other utilities used by Wayk products not specific to protocol itself"
 version = "0.1.0"
 authors = ["Benoît CORTIER <benoit.cortier@fried-world.eu>", "Salah Kamate <MohamedSalahKamate@gmail.com>"]
 edition = "2018"

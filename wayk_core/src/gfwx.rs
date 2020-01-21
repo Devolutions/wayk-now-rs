@@ -128,7 +128,7 @@ mod tests {
         0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x01, 0x00, 0x03, 0x00, 0x41, 0x37, 0x31, 0x31, 0x00, 0x00, 0x00, 0x00,
     ];
 
-    const DECODED_NOW_GFWX_HEADER: NowGfwxHeader = NowGfwxHeader {
+    const EXPECTED_NOW_GFWX_HEADER: NowGfwxHeader = NowGfwxHeader {
         magic: 1482114631,
         version: 2,
         offset: 36,
@@ -160,23 +160,23 @@ mod tests {
 
     const HEADER: Header = Header {
         version: NOW_GFWX_PARAMS.version,
-        width: DECODED_NOW_GFWX_HEADER.image_width,
-        height: DECODED_NOW_GFWX_HEADER.image_height,
+        width: EXPECTED_NOW_GFWX_HEADER.image_width,
+        height: EXPECTED_NOW_GFWX_HEADER.image_height,
         layers: NOW_GFWX_PARAMS.layers,
         channels: NOW_GFWX_PARAMS.channels,
         bit_depth: NOW_GFWX_PARAMS.bit_depth,
         is_signed: NOW_GFWX_PARAMS.is_signed,
-        quality: DECODED_NOW_GFWX_HEADER.quality_level,
-        chroma_scale: DECODED_NOW_GFWX_HEADER.chroma_scale,
-        block_size: DECODED_NOW_GFWX_HEADER.block_size,
+        quality: EXPECTED_NOW_GFWX_HEADER.quality_level,
+        chroma_scale: EXPECTED_NOW_GFWX_HEADER.chroma_scale,
+        block_size: EXPECTED_NOW_GFWX_HEADER.block_size,
         filter: Filter::Linear,
         quantization: Quantization::Scalar,
         encoder: Encoder::Fast,
         intent: NOW_GFWX_PARAMS.intent,
         metadata_size: NOW_GFWX_PARAMS.metadata_size,
-        channel_size: DECODED_NOW_GFWX_HEADER.image_width as usize * DECODED_NOW_GFWX_HEADER.image_height as usize,
-        image_size: DECODED_NOW_GFWX_HEADER.image_width as usize
-            * DECODED_NOW_GFWX_HEADER.image_height as usize
+        channel_size: EXPECTED_NOW_GFWX_HEADER.image_width as usize * EXPECTED_NOW_GFWX_HEADER.image_height as usize,
+        image_size: EXPECTED_NOW_GFWX_HEADER.image_width as usize
+            * EXPECTED_NOW_GFWX_HEADER.image_height as usize
             * NOW_GFWX_PARAMS.layers as usize
             * NOW_GFWX_PARAMS.channels as usize,
     };
@@ -185,28 +185,28 @@ mod tests {
     fn now_gfwx_header_decode() {
         let now_gfwx_header = NowGfwxHeader::decode(&ENCODED_NOW_GFWX_HEADER).unwrap();
 
-        assert_eq!(DECODED_NOW_GFWX_HEADER.magic, now_gfwx_header.magic);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.version, now_gfwx_header.version);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.offset, now_gfwx_header.offset);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.flags, now_gfwx_header.flags);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.quality_level, now_gfwx_header.quality_level);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.chroma_scale, now_gfwx_header.chroma_scale);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.block_size, now_gfwx_header.block_size);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.filter, now_gfwx_header.filter);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.quantization, now_gfwx_header.quantization);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.encoder, now_gfwx_header.encoder);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.boost, now_gfwx_header.boost);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.image_width, now_gfwx_header.image_width);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.image_height, now_gfwx_header.image_height);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.layer_count, now_gfwx_header.layer_count);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.channel_count, now_gfwx_header.channel_count);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.transform, now_gfwx_header.transform);
-        assert_eq!(DECODED_NOW_GFWX_HEADER.color_flags, now_gfwx_header.color_flags);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.magic, now_gfwx_header.magic);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.version, now_gfwx_header.version);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.offset, now_gfwx_header.offset);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.flags, now_gfwx_header.flags);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.quality_level, now_gfwx_header.quality_level);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.chroma_scale, now_gfwx_header.chroma_scale);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.block_size, now_gfwx_header.block_size);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.filter, now_gfwx_header.filter);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.quantization, now_gfwx_header.quantization);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.encoder, now_gfwx_header.encoder);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.boost, now_gfwx_header.boost);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.image_width, now_gfwx_header.image_width);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.image_height, now_gfwx_header.image_height);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.layer_count, now_gfwx_header.layer_count);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.channel_count, now_gfwx_header.channel_count);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.transform, now_gfwx_header.transform);
+        assert_eq!(EXPECTED_NOW_GFWX_HEADER.color_flags, now_gfwx_header.color_flags);
     }
 
     #[test]
     fn header_decode() {
-        let header = DECODED_NOW_GFWX_HEADER.to_gfwx_header_with_params(NOW_GFWX_PARAMS);
+        let header = EXPECTED_NOW_GFWX_HEADER.to_gfwx_header_with_params(NOW_GFWX_PARAMS);
 
         assert_eq!(header.version, HEADER.version);
         assert_eq!(header.width, HEADER.width);
