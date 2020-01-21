@@ -6,7 +6,6 @@ use gfwx::Quantization;
 use num_derive::FromPrimitive;
 use wayk_proto_derive::{Decode, Encode};
 
-#[repr(C)]
 #[derive(Debug, Clone)]
 pub struct NowGfwxParams {
     pub version: u32,
@@ -39,7 +38,6 @@ pub enum NowGWFXEncoder {
     Contextual = 2,
 }
 
-#[repr(C)]
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct NowGfwxHeader {
     pub magic: u32,
