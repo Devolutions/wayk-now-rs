@@ -16,4 +16,5 @@ wayk_proto_derive = {version = "0.1",  path = "../wayk_proto_derive"}
 num = { version = "0.2", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 num-derive = "0.2"
-gfwx = {git = "https://github.com/Devolutions/gfwx-rs", branch = "master", default-features = false}
+gfwx = { version = "0.3", default-features = false }
+
