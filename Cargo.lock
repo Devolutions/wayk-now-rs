@@ -149,6 +149,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gfwx"
+version = "0.2.0"
+source = "git+https://github.com/Devolutions/gfwx-rs#1aaeb0ff5c91be404e0fd907e4ed30645e1e58b4"
+dependencies = [
+ "byteorder",
+ "num-derive",
+ "num-traits",
+]
+
+[[package]]
 name = "heck"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -551,6 +561,18 @@ dependencies = [
  "simplelog",
  "structopt",
  "wayk_proto",
+]
+
+[[package]]
+name = "wayk_core"
+version = "0.1.0"
+dependencies = [
+ "gfwx",
+ "num",
+ "num-derive",
+ "num-traits",
+ "wayk_proto",
+ "wayk_proto_derive",
 ]
 
 [[package]]
