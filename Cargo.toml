@@ -3,7 +3,8 @@
 members = [
     "wayk_proto",
     "wayk_proto_derive",
-    "wayk_cli_client"
+    "wayk_cli_client",
+    "wayk_core"
 ]
 
 [profile.release]
