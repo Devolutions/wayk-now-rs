@@ -13,7 +13,7 @@ Provides basic Wayk Now packet encoder-decoder and sequencing utilities.
 
 Provides derive macros for Encode and Decode traits from wayk_proto.
 
-## wayk_core
+### wayk_core
 
 Provides data structures and other utilities used by Wayk products not specific to protocol itself.
 
