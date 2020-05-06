@@ -130,8 +130,8 @@ pub struct CustomVirtualChannel<'a> {
 pub enum NowVirtualChannel<'a> {
     Clipboard(NowClipboardMsg<'a>),
     Chat(NowChatMsg),
+    FileTransfer(NowFileTransferMsg<'a>),
     // TODO: Exec(NowExecMsg),
-    // TODO: FileTransfer(NowFileTransferMsg),
     // TODO: Tunnel(NowTunnelMsg),
     Custom(CustomVirtualChannel<'a>),
 }
@@ -141,6 +141,7 @@ impl<'a> NowVirtualChannel<'a> {
         Ok(match channel {
             ChannelName::Clipboard => Self::Clipboard(NowClipboardMsg::decode_from(cursor)?),
             ChannelName::Chat => Self::Chat(NowChatMsg::decode_from(cursor)?),
+            ChannelName::FileTransfer => Self::FileTransfer(NowFileTransferMsg::decode_from(cursor)?),
             _ => Self::Custom(CustomVirtualChannel {
                 name: channel.clone(),
                 payload: &cursor.get_ref()[cursor.position() as usize..],
@@ -152,6 +153,7 @@ impl<'a> NowVirtualChannel<'a> {
         match self {
             NowVirtualChannel::Clipboard(_) => &ChannelName::Clipboard,
             NowVirtualChannel::Chat(_) => &ChannelName::Chat,
+            NowVirtualChannel::FileTransfer(_) => &ChannelName::FileTransfer,
             NowVirtualChannel::Custom(msg) => &msg.name,
         }
     }
@@ -286,6 +288,102 @@ impl From<NowChatStatusMsg> for NowVirtualChannel<'_> {
 impl From<NowChatPokeMsg> for NowVirtualChannel<'_> {
     fn from(msg: NowChatPokeMsg) -> Self {
         Self::Chat(NowChatMsg::Poke(msg))
+    }
+}
+
+impl From<NowFileTransferCapsetReqMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCapsetReqMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CapsetReq(msg))
+    }
+}
+
+impl From<NowFileTransferCapsetRspMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCapsetRspMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CapsetRsp(msg))
+    }
+}
+
+impl From<NowFileTransferAbortMsgMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferAbortMsgMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::AbortMsg(msg))
+    }
+}
+
+impl From<NowFileTransferCreateReqMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCreateReqMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CreateReq(msg))
+    }
+}
+
+impl From<NowFileTransferCreateRspMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCreateRspMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CreateRsp(msg))
+    }
+}
+
+impl From<NowFileTransferRetryReqMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferRetryReqMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::RetryReq(msg))
+    }
+}
+
+impl From<NowFileTransferRetryRspMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferRetryRspMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::RetryRsp(msg))
+    }
+}
+
+impl From<NowFileTransferSuspendReqMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferSuspendReqMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::SuspendReq(msg))
+    }
+}
+
+impl From<NowFileTransferSuspendRspMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferSuspendRspMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::SuspendRsp(msg))
+    }
+}
+
+impl From<NowFileTransferResumeReqMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferResumeReqMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::ResumeReq(msg))
+    }
+}
+
+impl From<NowFileTransferResumeRspMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferResumeRspMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::ResumeRsp(msg))
+    }
+}
+
+impl From<NowFileTransferCancelReqMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCancelReqMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CancelReq(msg))
+    }
+}
+
+impl From<NowFileTransferCancelRspMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCancelRspMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CancelRsp(msg))
+    }
+}
+
+impl From<NowFileTransferCompleteReqMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCompleteReqMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CompleteReq(msg))
+    }
+}
+
+impl From<NowFileTransferCompleteRspMsg> for NowVirtualChannel<'_> {
+    fn from(msg: NowFileTransferCompleteRspMsg) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::CompleteRsp(msg))
+    }
+}
+
+impl<'a> From<NowFileTransferDataMsg<'a>> for NowVirtualChannel<'a> {
+    fn from(msg: NowFileTransferDataMsg<'a>) -> Self {
+        Self::FileTransfer(NowFileTransferMsg::Data(msg))
     }
 }
 
