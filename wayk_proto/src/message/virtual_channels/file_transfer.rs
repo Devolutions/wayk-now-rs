@@ -1,4 +1,5 @@
 // File Transfer
+
 use crate::{
     container::Bytes32,
     message::{
@@ -579,15 +580,13 @@ impl<'a> NowFileTransferDataMsg<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-
-    use crate::{
-        message::{ChannelName, NowBody, NowVirtualChannel, VirtChannelsCtx},
-        packet::NowPacket,
-        serialization::{Decode, Encode},
-    };
-
     use super::*;
+    use crate::{
+        message::{ChannelName, NowBody, NowStatus, NowVirtualChannel, SeverityLevel, StatusType, VirtChannelsCtx},
+        packet::NowPacket,
+        serialization::Encode,
+    };
+    use std::{convert::TryFrom, io::Cursor};
 
     fn get_ctx() -> VirtChannelsCtx {
         let mut vchan_ctx = VirtChannelsCtx::new();
@@ -635,14 +634,109 @@ mod tests {
         }
     }
 
-    /*#[test]
+    #[test]
     fn file_transfer_create_req_encoding() {
         let session_id = 0;
         let file_size = 75856;
-        let file_name = "T0Z2XMSRZ-U5A24QJBG-12d4bed7821c-512.png".to_vec();
-        let msg = NowFileTransferCreateReqMsg::new(session_id,file_size, NowString65535::from(file_name));
+        let file_name = "T0Z2XMSRZ-U5A24QJBG-12d4bed7821c-512.png";
+        let msg = NowFileTransferCreateReqMsg::new(
+            session_id,
+            file_size,
+            NowString65535::try_from(file_name.to_string()).unwrap(),
+        );
         let channel_id = get_ctx().get_id_by_channel(&ChannelName::FileTransfer).unwrap();
         let packet = NowPacket::from_virt_channel(NowFileTransferMsg::from(msg), channel_id);
         assert_eq!(packet.encode().unwrap(), NOW_FILE_TRANSFERT_CREATE_REQ_PACKET.to_vec());
-    }*/
+    }
+
+    #[rustfmt::skip]
+    const NOW_FILE_TRANSFERT_CREATE_RSP_PACKET: [u8; 12] = [
+        // vheader
+        0x08, 0x00, 0x00, 0x81,
+        // file transfer
+        0x11, // subtype
+        0x00, // flags
+        0x00, 0x00, // session id
+        0x00, 0x00, 0x82, 0x00, // nstatus
+    ];
+
+    #[test]
+    fn file_transfer_create_rsp_decoding() {
+        let mut buffer = Vec::new();
+        let mut reader = Cursor::new(&NOW_FILE_TRANSFERT_CREATE_RSP_PACKET[..]);
+        let nstatus = NowStatus::<FileTransferStatusCode>::builder(FileTransferStatusCode::Success)
+            .severity(SeverityLevel::Info)
+            .status_type(StatusType::FileTransfer)
+            .build();
+
+        match NowPacket::read_from(&mut reader, &mut buffer, &get_ctx()) {
+            Ok(packet) => match packet.body {
+                NowBody::Message(_) => panic!("decoded a now message from a virtual channel packet"),
+                NowBody::VirtualChannel(vchan) => {
+                    if let NowVirtualChannel::FileTransfer(NowFileTransferMsg::CreateRsp(msg)) = vchan {
+                        assert_eq!(msg.subtype, FileTransferMessageType::CreateRsp);
+                        assert_eq!(msg.flags, 0x00);
+                        assert_eq!(msg.session_id, 0x0000);
+                        assert_eq!(msg.status.code(), nstatus.code());
+                        assert_eq!(msg.status.status_type(), nstatus.status_type());
+                    } else {
+                        panic!("decoded wrong virtual channel message");
+                    }
+                }
+            },
+            Err(e) => {
+                e.print_trace();
+                panic!("couldn't decode file transfer packet");
+            }
+        }
+    }
+
+    #[rustfmt::skip]
+    const NOW_FILE_TRANSFERT_DATA_PACKET: [u8; 22] = [
+        // vheader
+        0x12, 0x00, 0x00, 0x81,
+        // file transfer
+        0x20, // subtype
+        0x80, // flags
+        0x00, 0x00, // session id
+        0x0a, 0x00, 0x00, 0x00, // chunk size
+        0x50, 0x28, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // data
+    ];
+
+    #[test]
+    fn file_transfer_data_decoding() {
+        let mut buffer = Vec::new();
+        let mut reader = Cursor::new(&NOW_FILE_TRANSFERT_DATA_PACKET[..]);
+
+        match NowPacket::read_from(&mut reader, &mut buffer, &get_ctx()) {
+            Ok(packet) => match packet.body {
+                NowBody::Message(_) => panic!("decoded a now message from a virtual channel packet"),
+                NowBody::VirtualChannel(vchan) => {
+                    if let NowVirtualChannel::FileTransfer(NowFileTransferMsg::Data(msg)) = vchan {
+                        assert_eq!(msg.subtype, FileTransferMessageType::Data);
+                        assert_eq!(msg.flags.flag_compressed(), true);
+                        assert_eq!(msg.session_id, 0x0000);
+                        assert_eq!(msg.chunk_data.0.len(), 10);
+                    } else {
+                        panic!("decoded wrong virtual channel message");
+                    }
+                }
+            },
+            Err(e) => {
+                e.print_trace();
+                panic!("couldn't decode file transfer packet");
+            }
+        }
+    }
+
+    #[test]
+    fn file_transfer_data_encoding() {
+        let session_id = 0;
+        let flags = FlagsCompressed { value: 0x80 };
+        let chunk_data = vec![0x50, 0x28, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let msg = NowFileTransferDataMsg::new(session_id, flags, &chunk_data);
+        let channel_id = get_ctx().get_id_by_channel(&ChannelName::FileTransfer).unwrap();
+        let packet = NowPacket::from_virt_channel(NowFileTransferMsg::from(msg), channel_id);
+        assert_eq!(packet.encode().unwrap(), NOW_FILE_TRANSFERT_DATA_PACKET.to_vec());
+    }
 }

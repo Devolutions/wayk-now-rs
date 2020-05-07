@@ -291,6 +291,12 @@ impl From<NowChatPokeMsg> for NowVirtualChannel<'_> {
     }
 }
 
+impl<'a> From<NowFileTransferMsg<'a>> for NowVirtualChannel<'a> {
+    fn from(msg: NowFileTransferMsg<'a>) -> Self {
+        Self::FileTransfer(msg)
+    }
+}
+
 impl From<NowFileTransferCapsetReqMsg> for NowVirtualChannel<'_> {
     fn from(msg: NowFileTransferCapsetReqMsg) -> Self {
         Self::FileTransfer(NowFileTransferMsg::CapsetReq(msg))
