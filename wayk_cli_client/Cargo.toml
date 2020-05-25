@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/Devolutions/wayk-now-rs"
 
 [dependencies]
-wayk_proto = { version = "0.1", path = "../wayk_proto" }
+wayk_proto = { version = "0.2", path = "../wayk_proto" }
 structopt = "0.3"
 log = "0.4"
 simplelog = "0.7"

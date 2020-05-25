@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "wayk_core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gfwx",
  "num",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "wayk_proto"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "byteorder",
  "lazy_static",
@@ -593,7 +593,7 @@ dependencies = [
 
 [[package]]
 name = "wayk_proto_derive"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proc-macro2 1.0.8",
  "quote 1.0.2",

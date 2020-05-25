@@ -1,7 +1,7 @@
 [package]
 name = "wayk_core"
 description = "Provides data structures and other utilities used by Wayk products not specific to protocol itself"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Benoît CORTIER <benoit.cortier@fried-world.eu>", "Salah Kamate <MohamedSalahKamate@gmail.com>"]
 edition = "2018"
 readme = "README.md"
@@ -10,8 +10,8 @@ repository = "https://github.com/Devolutions/wayk-now-rs"
 
 [dependencies]
 
-wayk_proto = {version = "0.1", path = "../wayk_proto" }
-wayk_proto_derive = {version = "0.1",  path = "../wayk_proto_derive"}
+wayk_proto = {version = "0.2", path = "../wayk_proto" }
+wayk_proto_derive = {version = "0.2",  path = "../wayk_proto_derive"}
 
 num = { version = "0.2", default-features = false }
 num-traits = { version = "0.2", default-features = false }

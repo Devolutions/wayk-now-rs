@@ -1,6 +1,6 @@
 [package]
 name = "wayk_proto_derive"
-version = "0.1.0"
+version = "0.2.0"
 description = "derive macros for Encode and Decode traits from wayk_proto"
 authors = ["Benoît CORTIER <benoit.cortier@fried-world.eu>"]
 edition = "2018"
