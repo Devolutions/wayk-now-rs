@@ -150,8 +150,9 @@ dependencies = [
 
 [[package]]
 name = "gfwx"
-version = "0.2.0"
-source = "git+https://github.com/Devolutions/gfwx-rs#1aaeb0ff5c91be404e0fd907e4ed30645e1e58b4"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0938f7233610f8a51e3cfedb9c1e11c955681269b4fed5149965abffd248c147"
 dependencies = [
  "byteorder",
  "num-derive",

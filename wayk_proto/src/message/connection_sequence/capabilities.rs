@@ -272,6 +272,7 @@ __flags_struct! {
     LicenseCapsetFlags: u32 => {
         licensed = LICENSED = 0x0000_0001,
         mobile = MOBILE = 0x0000_0002,
+        web = WEB = 0x0000_0004,
     }
 }
 
