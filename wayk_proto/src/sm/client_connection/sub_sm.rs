@@ -230,7 +230,7 @@ impl ConnectionSM for AssociateSM {
     }
 
     fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
-        use wayk_proto::message::NowAssociateMsg;
+        use wayk_proto::message::{status::AssociateStatusCode, NowAssociateMsg};
 
         match &self.state {
             AssociateState::WaitInfo => match msg {
@@ -241,11 +241,17 @@ impl ConnectionSM for AssociateSM {
                 unexpected => unexpected_msg!(Self, self, unexpected),
             },
             AssociateState::WaitResponse => match msg {
-                NowMessage::Associate(NowAssociateMsg::Response(_)) => {
-                    self.state = AssociateState::Terminated;
-                    log::trace!("associate process succeeded");
-                    Ok(None)
-                }
+                NowMessage::Associate(NowAssociateMsg::Response(msg)) => match msg.status.code() {
+                    AssociateStatusCode::Success => {
+                        self.state = AssociateState::Terminated;
+                        log::trace!("associate process succeeded");
+                        Ok(None)
+                    }
+                    AssociateStatusCode::Failure => {
+                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
+                            .or_desc(format!("Association failed {:?}", msg.status.status_type().to_string()))
+                    }
+                },
                 unexpected => unexpected_msg!(Self, self, unexpected),
             },
             AssociateState::Terminated => unexpected_call!(Self, self, "update_with_message"),
