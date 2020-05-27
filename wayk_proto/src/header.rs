@@ -121,10 +121,10 @@ impl NowHeader {
         }
     }
 
-    pub fn borrow_abstract(&self) -> Box<&dyn AbstractNowHeader> {
+    pub fn borrow_abstract(&self) -> &dyn AbstractNowHeader {
         match self {
-            NowHeader::Short(header) => Box::new(header),
-            NowHeader::Long(header) => Box::new(header),
+            NowHeader::Short(header) => header,
+            NowHeader::Long(header) => header,
         }
     }
 

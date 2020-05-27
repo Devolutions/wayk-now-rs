@@ -117,6 +117,8 @@ where
         }
     }
 
+    /// # Safety
+    /// Provided string len must not exceed `NowStringSize::SIZE`
     pub unsafe fn from_string_unchecked(s: String) -> Self {
         Self {
             str: s,
@@ -124,6 +126,8 @@ where
         }
     }
 
+    /// # Safety
+    /// Provided string slice len must not exceed `NowStringSize::SIZE`
     pub unsafe fn from_str_unchecked(s: &str) -> Self {
         Self {
             str: s.to_string(),
