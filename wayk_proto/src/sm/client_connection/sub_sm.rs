@@ -230,13 +230,19 @@ impl ConnectionSM for AssociateSM {
     }
 
     fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
-        use wayk_proto::message::{status::AssociateStatusCode, NowAssociateMsg};
+        use wayk_proto::message::{status::AssociateStatusCode, AssociateInfoFlags, NowAssociateMsg};
 
         match &self.state {
             AssociateState::WaitInfo => match msg {
-                NowMessage::Associate(NowAssociateMsg::Info(_)) => {
+                NowMessage::Associate(NowAssociateMsg::Info(msg)) => {
                     self.state = AssociateState::WaitResponse;
-                    Ok(Some(NowAssociateMsg::new_request().into()))
+                    match msg.flags.value {
+                        AssociateInfoFlags::ACTIVE => {
+                            log::trace!("associate process session is already active");
+                            Ok(None)
+                        }
+                        _ => Ok(Some(NowAssociateMsg::new_request().into())),
+                    }
                 }
                 unexpected => unexpected_msg!(Self, self, unexpected),
             },

@@ -335,7 +335,7 @@ impl Encode for SystemCapset {
             0
         };
 
-        mem::size_of::<u32>() + os_info_len
+        self.flags.encoded_len() + os_info_len
     }
 
     fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
