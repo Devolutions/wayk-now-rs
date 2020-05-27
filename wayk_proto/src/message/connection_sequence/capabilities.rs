@@ -317,7 +317,7 @@ pub struct SystemCapset {
 }
 
 impl SystemCapset {
-    pub const NAME: &'static str = "NowSystem";
+    const NAME: &'static str = "NowSystem";
 
     pub fn new_os_info(os_info: NowSystemOsInfo) -> Self {
         Self {
@@ -329,24 +329,16 @@ impl SystemCapset {
 
 impl Encode for SystemCapset {
     fn encoded_len(&self) -> usize {
-        let mut os_info_len = 0;
-        if let Some(os_info) = &self.os_info {
-            os_info_len = os_info.encoded_len();
-        }
+        let os_info_len = if let Some(os_info) = &self.os_info {
+            os_info.encoded_len()
+        } else {
+            0
+        };
 
-        mem::size_of::<u16>() + Self::NAME.len() + 2 + mem::size_of::<u32>() + os_info_len
+        mem::size_of::<u32>() + os_info_len
     }
 
     fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
-        let name = unsafe { NowString64::from_str_unchecked(Self::NAME) };
-
-        let size = u16::try_from(self.encoded_len())
-            .map_err(ProtoError::from)
-            .chain(ProtoErrorKind::Encoding(stringify!(NowCapset)))
-            .or_desc("capset data too large for the size field")?;
-
-        size.encode_into(writer)?;
-        name.encode_into(writer)?;
         self.flags.encode_into(writer)?;
         if let Some(os_info) = &self.os_info {
             os_info.encode_into(writer)?;
@@ -357,27 +349,13 @@ impl Encode for SystemCapset {
 
 impl<'dec: 'a, 'a> Decode<'dec> for SystemCapset {
     fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
-        let flags = cursor.read_u32::<LittleEndian>()?;
-        match flags {
-            SystemCapsetFlags::OS_INFO => match NowSystemOsInfo::decode_from(cursor) {
-                Ok(os_info) => {
-                    return Ok(SystemCapset {
-                        flags: SystemCapsetFlags::new_empty().set_os_info(),
-                        os_info: Some(os_info),
-                    })
-                }
-                Err(e) => {
-                    e.print_trace();
-                    panic!("couldn't decode capabilities packet");
-                }
-            },
-            _ => {
-                return Ok(SystemCapset {
-                    flags: SystemCapsetFlags::new_empty(),
-                    os_info: None,
-                })
-            }
-        }
+        let flags = SystemCapsetFlags::decode_from(cursor)?;
+        let os_info = if flags.os_info() {
+            Some(NowSystemOsInfo::decode_from(cursor)?)
+        } else {
+            None
+        };
+        Ok(SystemCapset { flags, os_info })
     }
 }
 
@@ -490,7 +468,7 @@ impl<'a> Encode for NowCapset<'a> {
             NowCapset::Update(capset) => encoded_len_capset_variant!(capset, UpdateCapset),
             NowCapset::Input(capset) => encoded_len_capset_variant!(capset, InputCapset),
             NowCapset::Mouse(capset) => encoded_len_capset_variant!(capset, MouseCapset),
-            NowCapset::System(capset) => capset.encoded_len(),
+            NowCapset::System(capset) => encoded_len_capset_variant!(capset, SystemCapset),
         }
     }
 
@@ -518,7 +496,9 @@ impl<'a> Encode for NowCapset<'a> {
             NowCapset::Mouse(capset) => {
                 encode_capset_variant! {capset, MouseCapset, writer}
             }
-            NowCapset::System(capset) => capset.encode_into(writer)?,
+            NowCapset::System(capset) => {
+                encode_capset_variant! {capset, SystemCapset, writer}
+            }
         }
 
         Ok(())
