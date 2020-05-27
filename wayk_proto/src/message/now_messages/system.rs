@@ -225,6 +225,7 @@ impl Encode for NowSystemOsInfo {
 impl Decode<'_> for NowSystemOsInfo {
     fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
         cursor.seek(SeekFrom::Current(mem::size_of::<SystemInfoType>() as i64))?;
+
         let flags = SystemOsInfoFlags::decode_from(cursor).or_desc("couldn't decode os info flags")?;
         let os_type = OsType::decode_from(cursor).or_desc("couldn't decode os type")?;
         let os_arch = OsArch::decode_from(cursor).or_desc("couldn't decode os arch")?;
@@ -237,17 +238,21 @@ impl Decode<'_> for NowSystemOsInfo {
         let kernel_arch;
         let kernel_release;
         let kernel_version;
-        if flags.kernel() {
-            kernel_name = NowString16::decode_from(cursor).or_desc("couldn't decode kernel name")?;
-            kernel_arch = NowString16::decode_from(cursor).or_desc("couldn't decode kernel arch")?;
-            kernel_release = NowString32::decode_from(cursor).or_desc("couldn't decode kernel release")?;
-            kernel_version = NowString128::decode_from(cursor).or_desc("couldn't decode kernel version")?;
-        } else {
-            kernel_name = NowString16::new_empty();
-            kernel_arch = NowString16::new_empty();
-            kernel_release = NowString32::new_empty();
-            kernel_version = NowString128::new_empty();
+
+        {
+            if flags.kernel() {
+                kernel_name = NowString16::decode_from(cursor).or_desc("couldn't decode kernel name")?;
+                kernel_arch = NowString16::decode_from(cursor).or_desc("couldn't decode kernel arch")?;
+                kernel_release = NowString32::decode_from(cursor).or_desc("couldn't decode kernel release")?;
+                kernel_version = NowString128::decode_from(cursor).or_desc("couldn't decode kernel version")?;
+            } else {
+                kernel_name = NowString16::new_empty();
+                kernel_arch = NowString16::new_empty();
+                kernel_release = NowString32::new_empty();
+                kernel_version = NowString128::new_empty();
+            }
         }
+
         let extra = if flags.extra() {
             match os_type {
                 OsType::Windows => Some(OsInfoExtra::Windows(OsInfoExtraWindows::decode_from(cursor)?)),
