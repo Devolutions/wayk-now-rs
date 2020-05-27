@@ -260,7 +260,7 @@ impl ConnectionSM for AssociateSM {
                 },
                 unexpected => unexpected_msg!(Self, self, unexpected),
             },
-            _ => unexpected_call!(Self, self, "update_with_message"),
+            AssociateState::Terminated => unexpected_call!(Self, self, "update_with_message"),
         }
     }
 }
