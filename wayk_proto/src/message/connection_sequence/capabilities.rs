@@ -335,7 +335,7 @@ impl Encode for SystemCapset {
             0
         };
 
-        flags.encoded_len() + os_info_len
+        mem::size_of::<u32>() + os_info_len
     }
 
     fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
@@ -882,7 +882,7 @@ mod tests {
         assert_eq!(capset.encode().unwrap(), UNKNOWN_CAPSET.to_vec(),)
     }
 
-    const PACKET_WITOUT_OS_INFO: [u8; 268] = [
+    const PACKET_WITHOUT_OS_INFO: [u8; 268] = [
         0x08, 0x01, 0x05, 0x80, 0x00, 0x00, 0x00, 0x00, 0x08, 0x14, 0x00, 0x0c, 0x4e, 0x6f, 0x77, 0x54, 0x72, 0x61,
         0x6e, 0x73, 0x70, 0x6f, 0x72, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2b, 0x00, 0x0a, 0x4e, 0x6f, 0x77, 0x53,
         0x75, 0x72, 0x66, 0x61, 0x63, 0x65, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x3d, 0x07, 0xc5,
@@ -903,7 +903,7 @@ mod tests {
     #[test]
     fn full_decode_packet_without_os_info() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&PACKET_WITOUT_OS_INFO[..]);
+        let mut reader = Cursor::new(&PACKET_WITHOUT_OS_INFO[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {
