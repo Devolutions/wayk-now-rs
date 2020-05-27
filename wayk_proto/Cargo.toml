@@ -2,7 +2,7 @@
 name = "wayk_proto"
 keywords = ["wayk", "codec", "protocol"]
 description = "WaykNow packet encoder-decoder and sequencing utilities"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Benoît CORTIER <benoit.cortier@fried-world.eu>"]
 edition = "2018"
 readme = "README.md"
