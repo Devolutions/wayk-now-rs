@@ -1,8 +1,4 @@
-use gfwx::Encoder;
-use gfwx::Filter;
-use gfwx::Header;
-use gfwx::Intent;
-use gfwx::Quantization;
+use gfwx::{Encoder, Filter, Header, Intent, Quantization};
 use num_derive::FromPrimitive;
 use wayk_proto_derive::{Decode, Encode};
 
