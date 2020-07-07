@@ -61,6 +61,11 @@ pub trait ClipboardChannelCallbackTrait {
         #![allow(unused_variables)]
         Ok(None)
     }
+
+    fn auto_fetch_data<'msg>(&mut self) -> VirtChannelSMResult<'msg> {
+        #![allow(unused_variables)]
+        Ok(None)
+    }
 }
 
 sa::assert_obj_safe!(ClipboardChannelCallbackTrait);
@@ -74,12 +79,14 @@ enum ClipboardState {
     Capabilities,
     Disabled,
     Enabled,
+    EnabledWithAutoFetch,
     Terminated,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClipboardData {
     is_owner: bool,
+    auto_fetch: bool,
     sequence_id: u16,
 }
 
@@ -93,12 +100,21 @@ impl ClipboardData {
     pub fn new() -> Self {
         Self {
             is_owner: false,
+            auto_fetch: true,
             sequence_id: 0,
         }
     }
 
     pub fn is_owner(&self) -> bool {
         self.is_owner
+    }
+
+    pub fn is_auto_fetch_mode(&self) -> bool {
+        self.auto_fetch
+    }
+
+    pub fn set_auto_fetch(&mut self, auto_fetch: bool) {
+        self.auto_fetch = auto_fetch;
     }
 
     pub fn current_sequence_id(&self) -> u16 {
@@ -182,6 +198,7 @@ where
             ClipboardState::Capabilities => true,
             ClipboardState::Disabled => true,
             ClipboardState::Enabled => true,
+            ClipboardState::EnabledWithAutoFetch => false,
             ClipboardState::Terminated => false,
         }
     }
@@ -192,6 +209,10 @@ where
                 log::trace!("start");
                 self.state = ClipboardState::Capabilities;
                 Ok(Some(NowClipboardCapabilitiesReqMsg::default().into()))
+            }
+            ClipboardState::EnabledWithAutoFetch => {
+                self.state = ClipboardState::Enabled;
+                self.user_callback.auto_fetch_data()
             }
             _ => self.__unexpected_without_call(),
         }
@@ -257,6 +278,9 @@ where
                             let mut data_mut = self.data.borrow_mut();
                             data_mut.is_owner = false;
                             log::trace!("ownership transferred to peer");
+                            if data_mut.auto_fetch {
+                                self.state = ClipboardState::EnabledWithAutoFetch;
+                            }
                             Ok(Some(
                                 NowClipboardFormatListRspMsg::new(data_mut.next_sequence_id()).into(),
                             ))
@@ -279,7 +303,8 @@ where
                         self.user_callback.on_format_list_rsp(msg)
                     }
                     NowClipboardMsg::FormatDataReq(msg) => {
-                        if self.data.borrow().is_owner {
+                        let data = self.data.borrow();
+                        if data.is_owner || data.auto_fetch {
                             self.user_callback.on_format_data_req(msg)
                         } else {
                             ProtoError::new(ProtoErrorKind::VirtualChannel(ChannelName::Clipboard))
