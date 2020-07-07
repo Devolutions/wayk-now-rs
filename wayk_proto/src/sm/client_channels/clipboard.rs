@@ -307,8 +307,9 @@ where
                         if data.is_owner || data.auto_fetch {
                             self.user_callback.on_format_data_req(msg)
                         } else {
-                            ProtoError::new(ProtoErrorKind::VirtualChannel(ChannelName::Clipboard))
-                                .or_desc("received format data request while not owner")
+                            ProtoError::new(ProtoErrorKind::VirtualChannel(ChannelName::Clipboard)).or_desc(
+                                "received format data request while not owner and auto fetch mode is not activated",
+                            )
                         }
                     }
                     NowClipboardMsg::FormatDataRsp(msg) => {
