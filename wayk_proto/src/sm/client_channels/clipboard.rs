@@ -79,7 +79,7 @@ enum ClipboardState {
     Capabilities,
     Disabled,
     Enabled,
-    EnabledWithAutoFetch,
+    AutoFetch,
     Terminated,
 }
 
@@ -198,7 +198,7 @@ where
             ClipboardState::Capabilities => true,
             ClipboardState::Disabled => true,
             ClipboardState::Enabled => true,
-            ClipboardState::EnabledWithAutoFetch => false,
+            ClipboardState::AutoFetch => false,
             ClipboardState::Terminated => false,
         }
     }
@@ -210,7 +210,7 @@ where
                 self.state = ClipboardState::Capabilities;
                 Ok(Some(NowClipboardCapabilitiesReqMsg::default().into()))
             }
-            ClipboardState::EnabledWithAutoFetch => {
+            ClipboardState::AutoFetch => {
                 self.state = ClipboardState::Enabled;
                 self.user_callback.auto_fetch_data()
             }
@@ -279,7 +279,7 @@ where
                             data_mut.is_owner = false;
                             log::trace!("ownership transferred to peer");
                             if data_mut.auto_fetch {
-                                self.state = ClipboardState::EnabledWithAutoFetch;
+                                self.state = ClipboardState::AutoFetch;
                             }
                             Ok(Some(
                                 NowClipboardFormatListRspMsg::new(data_mut.next_sequence_id()).into(),
