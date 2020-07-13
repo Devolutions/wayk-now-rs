@@ -1,7 +1,7 @@
 /** SHAREE **/
 use crate::message::{NowBody, NowMessage, VirtChannelsCtx};
 use crate::{
-    channels_manager::ChannelsManager,
+    channels_manager::{ChannelsManager, ChannelsManagerResult},
     error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
     message::NowTerminateMsg,
     packet::NowPacket,
@@ -46,23 +46,6 @@ pub struct Sharee<ConnectionSeq, UserCallback> {
     user_callback: UserCallback,
     shared_data: ConnectionSMSharedDataRc,
     channels_ctx: VirtChannelsCtx,
-}
-
-macro_rules! map_channels_manager_result {
-    ($self:ident, $result:ident) => {
-        match $result {
-            Ok(Some((name, virt_chan))) => Ok(Some(NowPacket::from_virt_channel(
-                virt_chan,
-                $self
-                    .channels_ctx
-                    .get_id_by_channel(&name)
-                    .chain(ProtoErrorKind::Sharee(ShareeState::Active))
-                    .or_else_desc(|| format!("channel id for {:?} not found in channels context", name))?,
-            ))),
-            Ok(None) => Ok(None),
-            Err(err) => Err(err),
-        }
-    };
 }
 
 impl<ConnectionSeq, UserCallback> Sharee<ConnectionSeq, UserCallback>
@@ -120,7 +103,7 @@ where
             }
             ShareeState::Active => {
                 let result = self.channels_manager.update_without_virt_msg();
-                map_channels_manager_result!(self, result)
+                self.__map_channels_manager_result(result)
             }
             ShareeState::Final => Ok(NowPacket::from_message(NowTerminateMsg::default()).into()),
         }
@@ -159,7 +142,7 @@ where
                 ),
                 ShareeState::Active => {
                     let result = self.channels_manager.update_with_virt_msg(chan_msg);
-                    map_channels_manager_result!(self, result)
+                    self.__map_channels_manager_result(result)
                 }
                 ShareeState::Final => ProtoError::new(ProtoErrorKind::Sharee(self.state)).or_desc(
                     "unexpected call to `Sharee::update_with_body` in final state with a virtual channel message",
@@ -187,5 +170,19 @@ where
         }
         log::debug!("virtual channels context: {:#?}", self.channels_ctx);
         self.user_callback.on_enter_active_state(&self.shared_data.borrow());
+    }
+
+    fn __map_channels_manager_result<'msg>(&self, chan_result: ChannelsManagerResult<'msg>) -> ShareeResult<'msg> {
+        match chan_result {
+            Ok(Some((name, virt_chan))) => Ok(Some(NowPacket::from_virt_channel(
+                virt_chan,
+                self.channels_ctx
+                    .get_id_by_channel(&name)
+                    .chain(ProtoErrorKind::Sharee(ShareeState::Active))
+                    .or_else_desc(|| format!("channel id for {:?} not found in channels context", name))?,
+            ))),
+            Ok(None) => Ok(None),
+            Err(err) => Err(err),
+        }
     }
 }
