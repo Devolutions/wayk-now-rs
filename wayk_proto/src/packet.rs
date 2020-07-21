@@ -82,6 +82,7 @@ impl<'a> NowPacket<'a> {
             NowMessage::Surface(msg) => NowHeader::new_with_msg_type(MessageType::Surface, msg.encoded_len() as u32),
             NowMessage::Update(msg) => NowHeader::new_with_msg_type(MessageType::Update, msg.encoded_len() as u32),
             NowMessage::System(msg) => NowHeader::new_with_msg_type(MessageType::System, msg.encoded_len() as u32),
+            NowMessage::Sharing(msg) => NowHeader::new_with_msg_type(MessageType::Sharing, msg.encoded_len() as u32),
         };
 
         Self {

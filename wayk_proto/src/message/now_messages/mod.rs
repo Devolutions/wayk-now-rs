@@ -2,6 +2,7 @@
 
 pub mod input;
 pub mod mouse;
+pub mod sharing;
 pub mod surface;
 pub mod system;
 pub mod update;
@@ -9,6 +10,7 @@ pub mod update;
 // re-export
 pub use input::*;
 pub use mouse::*;
+pub use sharing::*;
 pub use surface::*;
 pub use system::*;
 pub use update::*;

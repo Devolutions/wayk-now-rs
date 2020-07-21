@@ -312,6 +312,7 @@ pub enum NowMessage<'a> {
     Surface(NowSurfaceMsg),
     Update(NowUpdateMsg<'a>),
     System(NowSystemMsg),
+    Sharing(NowSharingMsg),
 }
 
 impl<'a> NowMessage<'a> {
@@ -329,6 +330,7 @@ impl<'a> NowMessage<'a> {
             MessageType::Update => Self::Update(NowUpdateMsg::decode_from(cursor)?),
             MessageType::System => Self::System(NowSystemMsg::decode_from(cursor)?),
             MessageType::Input => Self::Input(NowInputMsg::decode_from(cursor)?),
+            MessageType::Sharing => Self::Sharing(NowSharingMsg::decode_from(cursor)?),
 
             MessageType::Status => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
                 .or_desc("Status message type not yet supported")?,
@@ -342,8 +344,6 @@ impl<'a> NowMessage<'a> {
                 .or_desc("Desktop message type not yet supported")?,
             MessageType::Session => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
                 .or_desc("Session message type not yet supported")?,
-            MessageType::Sharing => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
-                .or_desc("Sharing message type not yet supported")?,
         })
     }
 
@@ -361,6 +361,7 @@ impl<'a> NowMessage<'a> {
             NowMessage::Surface(_) => MessageType::Surface,
             NowMessage::Update(_) => MessageType::Update,
             NowMessage::System(_) => MessageType::System,
+            NowMessage::Sharing(_) => MessageType::Sharing,
         }
     }
 }
@@ -434,5 +435,11 @@ impl<'a> From<NowUpdateMsg<'a>> for NowMessage<'a> {
 impl From<NowSystemMsg> for NowMessage<'_> {
     fn from(msg: NowSystemMsg) -> Self {
         Self::System(msg)
+    }
+}
+
+impl From<NowSharingMsg> for NowMessage<'_> {
+    fn from(msg: NowSharingMsg) -> Self {
+        Self::Sharing(msg)
     }
 }
