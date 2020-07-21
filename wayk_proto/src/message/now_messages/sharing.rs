@@ -48,6 +48,7 @@ pub enum NowSharingMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serialization::{Decode, Encode};
     use std::str::FromStr;
 
     #[rustfmt::skip]
