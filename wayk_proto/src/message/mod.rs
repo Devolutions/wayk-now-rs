@@ -312,6 +312,7 @@ pub enum NowMessage<'a> {
     Surface(NowSurfaceMsg),
     Update(NowUpdateMsg<'a>),
     System(NowSystemMsg),
+    Sharing(NowSharingMsg),
 }
 
 impl<'a> NowMessage<'a> {
@@ -361,6 +362,7 @@ impl<'a> NowMessage<'a> {
             NowMessage::Surface(_) => MessageType::Surface,
             NowMessage::Update(_) => MessageType::Update,
             NowMessage::System(_) => MessageType::System,
+            NowMessage::Sharing(_) => MessageType::Sharing,
         }
     }
 }
@@ -434,5 +436,11 @@ impl<'a> From<NowUpdateMsg<'a>> for NowMessage<'a> {
 impl From<NowSystemMsg> for NowMessage<'_> {
     fn from(msg: NowSystemMsg) -> Self {
         Self::System(msg)
+    }
+}
+
+impl From<NowSharingMsg> for NowMessage<'_> {
+    fn from(msg: NowSharingMsg) -> Self {
+        Self::Sharing(msg)
     }
 }
