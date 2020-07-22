@@ -1,5 +1,6 @@
 use crate::message::NowString256;
 use num_derive::FromPrimitive;
+use std::str::FromStr;
 
 #[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
 #[repr(u8)]
@@ -8,7 +9,7 @@ pub enum SharingMessageType {
     Resume = 0x02,
 }
 
-#[derive(Encode, Decode, Debug, Clone)]
+#[derive(Encode, Decode, Debug, Clone, Default)]
 pub struct NowSharingSuspendMsg {
     subtype: SharingMessageType,
     flags: u8,
@@ -16,16 +17,26 @@ pub struct NowSharingSuspendMsg {
     pub message: NowString256,
 }
 
-impl NowSharingSuspendMsg {
-    pub const SUBTYPE: SharingMessageType = SharingMessageType::Suspend;
-
-    pub fn new_with_message(message: NowString256) -> Self {
-        Self {
-            subtype: Self::SUBTYPE,
+impl Default for NowSharingSuspendMsg {
+    fn default() -> Self {
+        NowSharingSuspendMsg {
+            subtype: SharingMessageType::Suspend,
             flags: 0,
             reserved: 0,
-            message,
+            message: NowString256::from_str("").unwrap(),
         }
+    }
+}
+
+impl NowSharingSuspendMsg {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn new_with_message(message: NowString256) -> Self {
+        let mut suspend_sharing = Self::default();
+        suspend_sharing.message = message;
+        suspend_sharing
     }
 }
 
