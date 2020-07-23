@@ -36,7 +36,7 @@ impl NowSharingSuspendMsg {
     pub fn new_with_message(message: NowString256) -> Self {
         Self {
             message,
-            ...Self::default(),
+            ..Self::default(),
         }
     }
 }
