@@ -34,9 +34,10 @@ impl NowSharingSuspendMsg {
     }
 
     pub fn new_with_message(message: NowString256) -> Self {
-        let mut suspend_sharing = Self::default();
-        suspend_sharing.message = message;
-        suspend_sharing
+        Self {
+            message,
+            ...Self::default(),
+        }
     }
 }
 
