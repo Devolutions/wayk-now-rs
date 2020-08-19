@@ -313,6 +313,7 @@ pub enum NowMessage<'a> {
     Update(NowUpdateMsg<'a>),
     System(NowSystemMsg),
     Sharing(NowSharingMsg),
+    Access(NowAccessMsg),
 }
 
 impl<'a> NowMessage<'a> {
@@ -331,6 +332,7 @@ impl<'a> NowMessage<'a> {
             MessageType::System => Self::System(NowSystemMsg::decode_from(cursor)?),
             MessageType::Input => Self::Input(NowInputMsg::decode_from(cursor)?),
             MessageType::Sharing => Self::Sharing(NowSharingMsg::decode_from(cursor)?),
+            MessageType::Access => Self::Access(NowAccessMsg::decode_from(cursor)?),
 
             MessageType::Status => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
                 .or_desc("Status message type not yet supported")?,
@@ -338,8 +340,6 @@ impl<'a> NowMessage<'a> {
                 .or_desc("Mouse message type not yet supported")?,
             MessageType::Network => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
                 .or_desc("Network message type not yet supported")?,
-            MessageType::Access => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
-                .or_desc("Access message type not yet supported")?,
             MessageType::Desktop => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
                 .or_desc("Desktop message type not yet supported")?,
             MessageType::Session => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
@@ -362,6 +362,7 @@ impl<'a> NowMessage<'a> {
             NowMessage::Update(_) => MessageType::Update,
             NowMessage::System(_) => MessageType::System,
             NowMessage::Sharing(_) => MessageType::Sharing,
+            NowMessage::Access(_) => MessageType::Sharing,
         }
     }
 }
@@ -441,5 +442,11 @@ impl From<NowSystemMsg> for NowMessage<'_> {
 impl From<NowSharingMsg> for NowMessage<'_> {
     fn from(msg: NowSharingMsg) -> Self {
         Self::Sharing(msg)
+    }
+}
+
+impl From<NowAccessMsg> for NowMessage<'_> {
+    fn from(msg: NowAccessMsg) -> Self {
+        Self::Access(msg)
     }
 }

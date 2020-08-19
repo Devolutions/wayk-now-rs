@@ -1,5 +1,6 @@
 // ****** Now Messages ****** //
 
+pub mod access_control;
 pub mod input;
 pub mod mouse;
 pub mod sharing;
@@ -8,6 +9,7 @@ pub mod system;
 pub mod update;
 
 // re-export
+pub use access_control::*;
 pub use input::*;
 pub use mouse::*;
 pub use sharing::*;
