@@ -172,7 +172,6 @@ where
 
     fn __check_failure<'msg>(&mut self, flags: ClipboardResponseFlags) -> VirtChannelSMResult<'msg> {
         if flags.failure() {
-            self.state = ClipboardState::Terminated;
             ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name()))
         } else {
             Ok(None)
