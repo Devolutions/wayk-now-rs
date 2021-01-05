@@ -169,15 +169,6 @@ where
             self.state, unexpected
         ))
     }
-
-    fn __check_failure<'msg>(&mut self, flags: ClipboardResponseFlags) -> VirtChannelSMResult<'msg> {
-        if flags.failure() {
-            self.state = ClipboardState::Terminated;
-            ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name()))
-        } else {
-            Ok(None)
-        }
-    }
 }
 
 impl<UserCallback> VirtualChannelSM for ClipboardChannelSM<UserCallback>
@@ -226,8 +217,10 @@ where
             NowVirtualChannel::Clipboard(msg) => match self.state {
                 ClipboardState::Capabilities => match msg {
                     NowClipboardMsg::CapabilitiesRsp(msg) => {
-                        self.__check_failure(msg.flags)
-                            .or_desc("capabilities exchange failed")?;
+                        if msg.flags.failure() {
+                            log::warn!("capabilities exchange failed");
+                            return Ok(None);
+                        }
                         self.state = ClipboardState::Disabled;
                         log::trace!("capabilities exchange succeeded");
                         Ok(Some(NowClipboardControlReqMsg::new(ClipboardControlState::Auto).into()))
@@ -236,7 +229,10 @@ where
                 },
                 ClipboardState::Disabled => match msg {
                     NowClipboardMsg::ControlRsp(msg) => {
-                        self.__check_failure(msg.flags).or_desc("control setting failed")?;
+                        if msg.flags.failure() {
+                            log::warn!("control setting failed");
+                            return Ok(None);
+                        }
                         self.state = ClipboardState::Enabled;
                         log::trace!("enabled (control: {:?})", msg.control_state);
                         self.user_callback.on_control_rsp(msg)
@@ -258,7 +254,10 @@ where
                         }
                     }
                     NowClipboardMsg::ResumeRsp(msg) => {
-                        self.__check_failure(msg.flags).or_desc("resume failed")?;
+                        if msg.flags.failure() {
+                            log::warn!("resume failed");
+                            return Ok(None);
+                        }
                         self.state = ClipboardState::Enabled;
                         log::trace!("resumed");
                         self.user_callback.on_resume_rsp(msg)
@@ -267,7 +266,10 @@ where
                 },
                 ClipboardState::Enabled => match msg {
                     NowClipboardMsg::SuspendRsp(msg) => {
-                        self.__check_failure(msg.flags).or_desc("suspend failed")?;
+                        if msg.flags.failure() {
+                            log::warn!("suspend failed");
+                            return Ok(None);
+                        }
                         self.state = ClipboardState::Disabled;
                         log::trace!("disabled");
                         Ok(None)
@@ -296,8 +298,10 @@ where
                         }
                     }
                     NowClipboardMsg::FormatListRsp(msg) => {
-                        self.__check_failure(msg.flags)
-                            .or_desc("couldn't take ownership (refused by peer)")?;
+                        if msg.flags.failure() {
+                            log::warn!("couldn't take ownership (refused by peer)");
+                            return Ok(None);
+                        }
                         self.data.borrow_mut().is_owner = true;
                         log::trace!("took ownership");
                         self.user_callback.on_format_list_rsp(msg)
