@@ -165,12 +165,12 @@ fn build_sharee(args: &Cli) -> Sharee<ClientConnectionSeqSM<DummyConnectionSeqCa
     Sharee::new(connection_seq, channels_manager, ShareeCallback)
 }
 
-fn send_packet<'packet, W: Write>(writer: &mut W, packet: NowPacket<'packet>) {
+fn send_packet<W: Write>(writer: &mut W, packet: NowPacket<'_>) {
     writer.write_all(&packet.encode().unwrap()).unwrap();
     log::debug!("Sent {:?} packet.", packet.header.body_type());
 }
 
-fn handle_update_result<'packet, W: Write>(writer: &mut W, update_result: ShareeResult<'packet>) {
+fn handle_update_result<W: Write>(writer: &mut W, update_result: ShareeResult<'_>) {
     match update_result {
         Ok(response) => {
             if let Some(response) = response {
