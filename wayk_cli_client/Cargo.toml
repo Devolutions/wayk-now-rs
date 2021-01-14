@@ -13,4 +13,4 @@ repository = "https://github.com/Devolutions/wayk-now-rs"
 wayk_proto = { version = "0.2", path = "../wayk_proto" }
 structopt = "0.3"
 log = "0.4"
-simplelog = "0.7"
+simplelog = "0.9"

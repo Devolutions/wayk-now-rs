@@ -97,8 +97,7 @@ fn configure_logger(args: &Cli) {
             },
             Config::default(),
             TerminalMode::Mixed,
-        )
-        .unwrap(),
+        ),
         WriteLogger::new(
             if args.debug {
                 LevelFilter::Trace
