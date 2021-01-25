@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "wayk_proto"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "byteorder",
  "lazy_static",
