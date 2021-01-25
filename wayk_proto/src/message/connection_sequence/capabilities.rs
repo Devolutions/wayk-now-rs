@@ -124,6 +124,9 @@ pub enum InputActionCode {
     SelectAll = 0x0015,
     Undo = 0x0016,
     Redo = 0x0017,
+    Shutdown = 0x0020,
+    Reboot = 0x0021,
+    RebootSafe = 0x0022,
 }
 
 __flags_struct! {
