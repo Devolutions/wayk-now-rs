@@ -1,40 +1,56 @@
-use crate::{
-    container::{Bytes16, Vec16},
-    message::status::{AuthStatusCode, NowStatus},
-};
-use num_derive::FromPrimitive;
+use crate::container::{Bytes16, Vec16};
+use crate::message::status::{AuthStatusCode, NowStatus};
 
 // TODO: check usage of this enum...
 // SRP message types
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SRPMessageType {
-    SRPInitiate = 0x01,
-    SRPOffer = 0x02,
-    SRPAccept = 0x03,
-    SRPConfirm = 0x04,
+    #[value = 0x01]
+    SRPInitiate,
+    #[value = 0x02]
+    SRPOffer,
+    #[value = 0x03]
+    SRPAccept,
+    #[value = 0x04]
+    SRPConfirm,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum AuthenticateMessageType {
-    Token = 0x01,
-    Success = 0x02,
-    Failure = 0x03,
+    #[value = 0x01]
+    Token,
+    #[value = 0x02]
+    Success,
+    #[value = 0x03]
+    Failure,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum AuthType {
-    None = 0x00,
-    PFP = 0x01,
-    SRP = 0x02,
-    IGNORED1 = 0x03,
-    NTLM = 0x04,
-    SPNEGO = 0x05,
-    Kerberos = 0x06,
-    CredSSP = 0x07,
-    SRD = 0x08,
+    #[value = 0x00]
+    None,
+    #[value = 0x01]
+    PFP,
+    #[value = 0x02]
+    SRP,
+    #[value = 0x03]
+    IGNORED1,
+    #[value = 0x04]
+    NTLM,
+    #[value = 0x05]
+    SPNEGO,
+    #[value = 0x06]
+    Kerberos,
+    #[value = 0x07]
+    CredSSP,
+    #[value = 0x08]
+    SRD,
+    #[fallback]
+    Other(u8),
 }
 
 __flags_struct! {
@@ -184,10 +200,8 @@ impl NowAuthenticateFailureMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        message::status::{AuthStatusCode, SeverityLevel, StatusType},
-        serialization::{Decode, Encode},
-    };
+    use crate::message::status::{AuthStatusCode, SeverityLevel, StatusType};
+    use crate::serialization::{Decode, Encode};
 
     #[test]
     fn decoding_with_subtype_check() {

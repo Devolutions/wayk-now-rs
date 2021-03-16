@@ -1,12 +1,14 @@
 use crate::message::NowString256;
-use num_derive::FromPrimitive;
 use std::str::FromStr;
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SharingMessageType {
-    Suspend = 0x01,
-    Resume = 0x02,
+    #[value = 0x01]
+    Suspend,
+    #[value = 0x02]
+    Resume,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Encode, Decode, Debug, Clone)]

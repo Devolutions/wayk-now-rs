@@ -1,24 +1,28 @@
-use crate::{
-    error::Result,
-    message::{AuthType, NowAuthenticateMsg, NowAuthenticateTokenMsgOwned, NowString256, NowString64},
-    serialization::Encode,
-};
-use num_derive::FromPrimitive;
+use crate::error::Result;
+use crate::message::{AuthType, NowAuthenticateMsg, NowAuthenticateTokenMsgOwned, NowString256, NowString64};
+use crate::serialization::Encode;
 use std::str::FromStr;
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum PFPMessageType {
-    Negotiate = 0x01,
-    Challenge = 0x02,
-    Response = 0x03,
+    #[value = 0x01]
+    Negotiate,
+    #[value = 0x02]
+    Challenge,
+    #[value = 0x03]
+    Response,
+    #[fallback]
+    Other(u16),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum PFPMessageFlags {
-    NoChallenge = 0x0000,
-    Question = 0x0001,
+    #[value = 0x0000]
+    NoChallenge,
+    #[value = 0x0001]
+    Question,
+    #[fallback]
+    Other(u16),
 }
 
 #[derive(Debug, Clone, Encode, Decode)]

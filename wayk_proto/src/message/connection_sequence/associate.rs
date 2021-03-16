@@ -1,14 +1,17 @@
 // NOW_ASSOCIATE_MSG
 
 use crate::message::status::{AssociateStatusCode, NowStatus};
-use num_derive::FromPrimitive;
 
-#[derive(Decode, Encode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Decode, Encode, Debug, PartialEq, Clone, Copy)]
 pub enum AssociateMessageType {
-    Info = 0x01,
-    Request = 0x02,
-    Response = 0x03,
+    #[value = 0x01]
+    Info,
+    #[value = 0x02]
+    Request,
+    #[value = 0x03]
+    Response,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Debug, Clone, Encode, Decode)]

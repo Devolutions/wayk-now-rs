@@ -1,29 +1,35 @@
-use num_derive::FromPrimitive;
-use std::{
-    borrow::{Borrow, Cow},
-    io::{Cursor, Write},
-    str::FromStr,
-};
-use wayk_proto::{
-    container::Vec8,
-    error::Result,
-    message::NowString64,
-    serialization::{Decode, Encode},
-};
+use std::borrow::{Borrow, Cow};
+use std::io::{Cursor, Write};
+use std::str::FromStr;
+use wayk_proto::container::Vec8;
+use wayk_proto::error::Result;
+use wayk_proto::message::NowString64;
+use wayk_proto::serialization::{Decode, Encode};
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum ChannelMessageType {
-    ChannelListRequest = 0x01,
-    ChannelListResponse = 0x02,
-    ChannelOpenRequest = 0x03,
-    ChannelOpenResponse = 0x04,
-    ChannelCloseRequest = 0x05,
-    ChannelCloseResponse = 0x06,
-    ChannelStartRequest = 0x07,
-    ChannelStartResponse = 0x08,
-    ChannelStopRequest = 0x09,
-    ChannelStopResponse = 0x0a,
+    #[value = 0x01]
+    ChannelListRequest,
+    #[value = 0x02]
+    ChannelListResponse,
+    #[value = 0x03]
+    ChannelOpenRequest,
+    #[value = 0x04]
+    ChannelOpenResponse,
+    #[value = 0x05]
+    ChannelCloseRequest,
+    #[value = 0x06]
+    ChannelCloseResponse,
+    #[value = 0x07]
+    ChannelStartRequest,
+    #[value = 0x08]
+    ChannelStartResponse,
+    #[value = 0x09]
+    ChannelStopRequest,
+    #[value = 0x0a]
+    ChannelStopResponse,
+    #[fallback]
+    Other(u8),
 }
 
 __flags_struct! {
@@ -141,7 +147,8 @@ impl NowChannelMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{message::VirtChannelsCtx, packet::NowPacket};
+    use crate::message::VirtChannelsCtx;
+    use crate::packet::NowPacket;
 
     const CHANNEL_LIST_REQUEST_PACKET: [u8; 72] = [
         0x44, 0x00, 0x06, 0x80, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x4e, 0x6f, 0x77, 0x43, 0x6c, 0x69,

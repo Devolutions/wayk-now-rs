@@ -8,17 +8,16 @@ use alloc::vec::Vec;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{
-    punctuated::Punctuated, token::Add, Attribute, Data, Fields, Generics, Ident, Lifetime, LifetimeDef, Lit, Meta,
-    Type,
-};
+use syn::punctuated::Punctuated;
+use syn::token::Add;
+use syn::{Attribute, Data, Fields, Generics, Ident, Lifetime, LifetimeDef, Lit, LitInt, Meta, Type};
 
 mod parsed {
     use alloc::vec::Vec;
 
     pub enum Type<'a> {
         Struct(Struct<'a>),
-        FieldlessEnum(FieldlessEnum<'a>),
+        EnumWithFallback(EnumWithFallback<'a>),
         MetaEnum(MetaEnum<'a>),
     }
 
@@ -35,9 +34,16 @@ mod parsed {
         pub ty: &'a syn::Type,
     }
 
-    pub struct FieldlessEnum<'a> {
+    pub struct VariantWithValue<'a> {
+        pub ident: &'a syn::Ident,
+        pub value: syn::LitInt,
+    }
+
+    pub struct EnumWithFallback<'a> {
         pub name: &'a syn::Ident,
-        pub underlying_repr: syn::Ident,
+        pub underlying_repr: &'a syn::Type,
+        pub variants: Vec<VariantWithValue<'a>>,
+        pub fallback_variant: &'a syn::Ident,
     }
 
     pub struct MetaEnum<'a> {
@@ -55,7 +61,7 @@ mod parsed {
     }
 }
 
-#[proc_macro_derive(Encode, attributes(meta_enum, encode_ignore))]
+#[proc_macro_derive(Encode, attributes(meta_enum, encode_ignore, value, fallback))]
 pub fn encode_macro_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).expect("failed to parse input");
     impl_trait(&ast, impl_encode)
@@ -132,9 +138,14 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
 
             expanded.into()
         }
-        parsed::Type::FieldlessEnum(data) => {
+        parsed::Type::EnumWithFallback(data) => {
             let ty = data.name;
             let underlying_repr = data.underlying_repr;
+            let variants = data.variants;
+            let fallback_variant = data.fallback_variant;
+
+            let idents: Vec<&Ident> = variants.iter().map(|variant| variant.ident).collect();
+            let values: Vec<&LitInt> = variants.iter().map(|variant| &variant.value).collect();
 
             let expanded = quote! {
                 impl ::wayk_proto::serialization::Encode for #ty {
@@ -146,15 +157,23 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
                         &self,
                         writer: &mut W,
                     ) -> ::core::result::Result<(), ::wayk_proto::error::ProtoError> {
-                        <#underlying_repr>::encode_into(&(*self as #underlying_repr), writer)
+                        <#underlying_repr>::encode_into(&(#underlying_repr::from(*self)), writer)
                     }
                 }
 
-                impl #ty {
-                    fn to_primitive(&self) -> #underlying_repr {
-                        *self as #underlying_repr
+                impl ::std::convert::From<#ty> for #underlying_repr {
+                    fn from(
+                        v: #ty,
+                    ) -> #underlying_repr {
+                        match v {
+                            #(
+                                #ty::#idents => #values,
+                            )*
+                            #ty::#fallback_variant(inner) => inner,
+                        }
                     }
                 }
+
             };
 
             expanded.into()
@@ -162,7 +181,7 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(Decode, attributes(meta_enum, decode_ignore))]
+#[proc_macro_derive(Decode, attributes(meta_enum, decode_ignore, value, fallback))]
 pub fn decode_macro_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).expect("failed to parse input");
     impl_trait(&ast, impl_decode)
@@ -267,7 +286,7 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
             let expanded = quote! {
                 impl #impl_generics ::wayk_proto::serialization::Decode<'dec> for #ty #ty_generics #where_clause {
                     fn decode_from(cursor: &mut ::std::io::Cursor<&'dec [u8]>) -> ::core::result::Result<Self, ::wayk_proto::error::ProtoError> {
-                        use ::wayk_proto::error::{ProtoErrorResultExt, ProtoErrorKind};
+                        use ::wayk_proto::error::{ProtoError, ProtoErrorResultExt, ProtoErrorKind};
                         use ::wayk_proto::serialization::Encode;
                         use ::std::io::{Seek, SeekFrom};
 
@@ -289,6 +308,8 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
                                         stringify!(#variants)
                                     )),
                             )*
+                            _ => ProtoError::new(ProtoErrorKind::Decoding(stringify!(#ty)))
+                                .or_desc(format!("unsupported subtype: {:?}", subtype)),
                         }
                     }
                 }
@@ -296,24 +317,35 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
 
             expanded.into()
         }
-        parsed::Type::FieldlessEnum(data) => {
+        parsed::Type::EnumWithFallback(data) => {
             let ty = data.name;
             let underlying_repr = data.underlying_repr;
+            let variants = data.variants;
+            let fallback_variant = data.fallback_variant;
 
-            let from_primitive = Ident::new(&alloc::format!("from_{}", underlying_repr), Span::call_site());
+            let idents: Vec<&Ident> = variants.iter().map(|variant| variant.ident).collect();
+            let values: Vec<&LitInt> = variants.iter().map(|variant| &variant.value).collect();
 
             let expanded = quote! {
                 impl ::wayk_proto::serialization::Decode<'_> for #ty {
                     fn decode_from(
                         cursor: &mut ::std::io::Cursor<&[u8]>,
                     ) -> ::core::result::Result<Self, ::wayk_proto::error::ProtoError> {
-                        use ::wayk_proto::error::{ProtoErrorKind, ProtoErrorResultExt};
                         let v = #underlying_repr::decode_from(cursor)?;
-                        ::num::FromPrimitive::#from_primitive(v)
-                            .chain(ProtoErrorKind::Decoding(stringify!($ty)))
-                            .or_else_desc(||
-                                format!(concat!("no variant in ", stringify!(#ty), " for value {}"), v)
-                            )
+                        Ok(#ty::from(v))
+                    }
+                }
+
+                impl ::std::convert::From<#underlying_repr> for #ty {
+                    fn from(
+                        v: #underlying_repr,
+                    ) -> Self {
+                        match v {
+                            #(
+                                #values => #ty::#idents,
+                            )*
+                            _ => #ty::#fallback_variant(v),
+                        }
                     }
                 }
             };
@@ -360,7 +392,6 @@ where
         }
         Data::Enum(data) => {
             let meta_enum_attr = find_attr(&ast.attrs, "meta_enum");
-            let repr_attr = find_attr(&ast.attrs, "repr");
             if let Some(meta_enum_attr) = meta_enum_attr {
                 let meta = meta_enum_attr
                     .parse_meta()
@@ -375,9 +406,10 @@ where
                     panic!(r#"wrong meta for `meta_enum`. Expected a name value (eg: meta_enum = "...")."#);
                 };
 
-                let mut meta_variants = Vec::new();
-                for variant in &data.variants {
-                    let variant = parsed::MetaVariant {
+                let meta_variants = data
+                    .variants
+                    .iter()
+                    .map(|variant| parsed::MetaVariant {
                         decode_ignore: find_attr(&variant.attrs, "decode_ignore").is_some(),
                         encode_ignore: find_attr(&variant.attrs, "encode_ignore").is_some(),
                         name: &variant.ident,
@@ -386,10 +418,8 @@ where
                             Fields::Named(_) => panic!("named fields unsupported"),
                             Fields::Unit => panic!("unexpected unit field"),
                         },
-                    };
-
-                    meta_variants.push(variant);
-                }
+                    })
+                    .collect();
 
                 parsed::Type::MetaEnum(parsed::MetaEnum {
                     name: ty,
@@ -397,13 +427,46 @@ where
                     subtype_enum_ty,
                     meta_variants,
                 })
-            } else if let Some(repr_attr) = repr_attr {
-                parsed::Type::FieldlessEnum(parsed::FieldlessEnum {
-                    name: ty,
-                    underlying_repr: repr_attr.parse_args().expect("couldn't parse repr type"),
-                })
             } else {
-                panic!("meta_enum or repr attribute missing")
+                let variants = data
+                    .variants
+                    .iter()
+                    .filter_map(|variant| {
+                        let attr = find_attr(&variant.attrs, "value")?;
+                        let meta = attr.parse_meta().expect("failed to parse `value` attribute");
+                        let lit_int = if let Meta::NameValue(name) = meta {
+                            if let Lit::Int(lit_int) = name.lit {
+                                lit_int
+                            } else {
+                                panic!("wrong literal in `value` attribute parameter. Expected a int literal.");
+                            }
+                        } else {
+                            panic!(r#"wrong meta for `value`. Expected a name value (eg: value = 1)."#);
+                        };
+
+                        Some(parsed::VariantWithValue {
+                            ident: &variant.ident,
+                            value: lit_int,
+                        })
+                    })
+                    .collect();
+
+                let fallback_variant = data
+                    .variants
+                    .iter()
+                    .find(|v| find_attr(&v.attrs, "fallback").is_some())
+                    .expect("fallback variant not found");
+
+                parsed::Type::EnumWithFallback(parsed::EnumWithFallback {
+                    name: ty,
+                    underlying_repr: match &fallback_variant.fields {
+                        Fields::Unnamed(field) => &field.unnamed.first().unwrap().ty,
+                        Fields::Named(_) => panic!("named fields unsupported"),
+                        Fields::Unit => panic!("unexpected unit field"),
+                    },
+                    variants,
+                    fallback_variant: &fallback_variant.ident,
+                })
             }
         }
         Data::Union(_) => unimplemented!("union"),

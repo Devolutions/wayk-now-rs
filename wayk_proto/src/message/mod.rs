@@ -11,35 +11,55 @@ pub use now_messages::*;
 pub use status::*;
 pub use virtual_channels::*;
 
-use crate::{error::*, serialization::Decode};
+use crate::error::*;
+use crate::serialization::Decode;
 use alloc::collections::BTreeMap;
-use num_derive::FromPrimitive;
 use std::io::Cursor;
 
 // == MESSAGE TYPE == //
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy, Eq)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy, Eq)]
 pub enum MessageType {
-    Status = 0x00,
-    Handshake = 0x01,
-    Negotiate = 0x02,
-    Authenticate = 0x03,
-    Associate = 0x04,
-    Capabilities = 0x05,
-    Channel = 0x06,
-    Activate = 0x07,
-    Terminate = 0x08,
-    Surface = 0x41,
-    Update = 0x42,
-    Input = 0x43,
-    Mouse = 0x44,
-    Network = 0x45,
-    Access = 0x46,
-    Desktop = 0x47,
-    System = 0x48,
-    Session = 0x49,
-    Sharing = 0x50,
+    #[value = 0x00]
+    Status,
+    #[value = 0x01]
+    Handshake,
+    #[value = 0x02]
+    Negotiate,
+    #[value = 0x03]
+    Authenticate,
+    #[value = 0x04]
+    Associate,
+    #[value = 0x05]
+    Capabilities,
+    #[value = 0x06]
+    Channel,
+    #[value = 0x07]
+    Activate,
+    #[value = 0x08]
+    Terminate,
+    #[value = 0x41]
+    Surface,
+    #[value = 0x42]
+    Update,
+    #[value = 0x43]
+    Input,
+    #[value = 0x44]
+    Mouse,
+    #[value = 0x45]
+    Network,
+    #[value = 0x46]
+    Access,
+    #[value = 0x47]
+    Desktop,
+    #[value = 0x48]
+    System,
+    #[value = 0x49]
+    Session,
+    #[value = 0x50]
+    Sharing,
+    #[fallback]
+    Other(u8),
 }
 
 // == VIRTUAL CHANNELS CONTEXT ==
@@ -334,16 +354,18 @@ impl<'a> NowMessage<'a> {
             MessageType::Sharing => Self::Sharing(NowSharingMsg::decode_from(cursor)?),
             MessageType::Access => Self::Access(NowAccessMsg::decode_from(cursor)?),
 
-            MessageType::Status => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
+            MessageType::Status => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
                 .or_desc("Status message type not yet supported")?,
-            MessageType::Mouse => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
+            MessageType::Mouse => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
                 .or_desc("Mouse message type not yet supported")?,
-            MessageType::Network => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
+            MessageType::Network => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
                 .or_desc("Network message type not yet supported")?,
-            MessageType::Desktop => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
+            MessageType::Desktop => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
                 .or_desc("Desktop message type not yet supported")?,
-            MessageType::Session => ProtoError::new(ProtoErrorKind::Decoding("NowMessage"))
+            MessageType::Session => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
                 .or_desc("Session message type not yet supported")?,
+            MessageType::Other(v) => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
+                .or_desc(format!("Message type {} not yet supported", v))?,
         })
     }
 

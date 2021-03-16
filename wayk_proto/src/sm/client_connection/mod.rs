@@ -1,14 +1,13 @@
 /** client connection sequence **/
 mod sub_sm;
 
-use crate::{
-    message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage},
-    sm::{
-        ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionSeqCallbackTrait,
-        ConnectionState, DummyConnectionSM,
-    },
+use crate::message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage};
+use crate::sm::{
+    ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionSeqCallbackTrait,
+    ConnectionState, DummyConnectionSM,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct ClientConnectionSeqSM<UserCallback> {
     user_callback: UserCallback,

@@ -1,9 +1,8 @@
-use crate::{
-    message::{ChannelName, MessageType},
-    sharee::ShareeState,
-    sm::ConnectionState,
-};
-use core::{fmt, num::TryFromIntError};
+use crate::message::{ChannelName, MessageType};
+use crate::sharee::ShareeState;
+use crate::sm::ConnectionState;
+use core::fmt;
+use core::num::TryFromIntError;
 
 macro_rules! error_chain {
     ($error_ty:ident, $error_kind_ty:ident) => {

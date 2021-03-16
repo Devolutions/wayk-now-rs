@@ -1,4 +1,5 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::net::SocketAddr;
+use std::str::FromStr;
 use structopt::StructOpt;
 use wayk_proto::message::{AuthType, ChannelName, NowCapset};
 
@@ -127,7 +128,8 @@ impl FromStr for ChatConfig {
 }
 
 pub fn configure_capabilities() -> Vec<NowCapset<'static>> {
-    use wayk_proto::message::{connection_sequence::capabilities::*, now_messages::MouseMode};
+    use wayk_proto::message::connection_sequence::capabilities::*;
+    use wayk_proto::message::now_messages::MouseMode;
 
     vec![
         NowCapset::Transport(TransportCapset::default()),

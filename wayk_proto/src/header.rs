@@ -1,8 +1,6 @@
-use crate::{
-    error::*,
-    message::{BodyType, MessageType},
-    serialization::{Decode, Encode},
-};
+use crate::error::*;
+use crate::message::{BodyType, MessageType};
+use crate::serialization::{Decode, Encode};
 use std::io::{Cursor, Read, Write};
 
 const HEADER_VIRTUAL_CHANNEL_FLAG: u8 = 0x01;
@@ -68,7 +66,7 @@ impl NowHeader {
             reader
                 .read_exact(&mut buffer)
                 .map_err(ProtoError::from)
-                .chain(ProtoErrorKind::Decoding(stringify!(NowHeader)))
+                .chain(ProtoErrorKind::Decoding(__type_str!(NowHeader)))
                 .or_desc("couldn't read short bit (no enough bytes provided")?;
 
             let is_short = buffer[3] > 7;
@@ -78,7 +76,7 @@ impl NowHeader {
                 reader
                     .read_exact(&mut buffer[4..6])
                     .map_err(ProtoError::from)
-                    .chain(ProtoErrorKind::Decoding(stringify!(NowHeader)))
+                    .chain(ProtoErrorKind::Decoding(__type_str!(NowHeader)))
                     .or_desc("not enough bytes provided to parse long header")?;
             };
 

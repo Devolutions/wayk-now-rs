@@ -21,10 +21,8 @@ impl NowTerminateMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        message::status::{SeverityLevel, StatusType},
-        serialization::{Decode, Encode},
-    };
+    use crate::message::status::{SeverityLevel, StatusType};
+    use crate::serialization::{Decode, Encode};
 
     #[rustfmt::skip]
     const TERMINATE_MSG: [u8; 8] = [

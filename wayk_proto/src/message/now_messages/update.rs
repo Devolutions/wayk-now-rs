@@ -1,17 +1,18 @@
 // NOW_UPDATE_MSG
 
-use crate::{
-    container::{Bytes32, Vec8},
-    message::{common, Codec, SizeRect},
-};
-use num_derive::FromPrimitive;
+use crate::container::{Bytes32, Vec8};
+use crate::message::{common, Codec, SizeRect};
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum UpdateMessageType {
-    UpdateGraphics = 0x01,
-    UpdateRefresh = 0x02,
-    UpdateSuppress = 0x03,
+    #[value = 0x01]
+    UpdateGraphics,
+    #[value = 0x02]
+    UpdateRefresh,
+    #[value = 0x03]
+    UpdateSuppress,
+    #[fallback]
+    Other(u8),
 }
 
 __flags_struct! {
@@ -21,11 +22,14 @@ __flags_struct! {
     }
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum UpdateRegionFlag {
-    Null = 0x01,
-    Full = 0x02,
+    #[value = 0x01]
+    Null,
+    #[value = 0x02]
+    Full,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Decode, Encode, Debug, Clone)]
@@ -82,10 +86,8 @@ pub struct NowUpdateSuppressMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        header::{AbstractNowHeader, NowHeader},
-        serialization::Decode,
-    };
+    use crate::header::{AbstractNowHeader, NowHeader};
+    use crate::serialization::Decode;
 
     #[rustfmt::skip]
     const WAYK_NOW_UPDATE_GRAPHIC_MSG: [u8; 35] = [

@@ -1,13 +1,9 @@
-use crate::{
-    error::{ProtoErrorKind, ProtoErrorResultExt, Result},
-    header::{AbstractNowHeader, NowHeader, NowLongHeader},
-    message::{BodyType, MessageType, NowBody, NowMessage, NowVirtualChannel, VirtChannelsCtx},
-    serialization::{Decode, Encode},
-};
-use std::{
-    io::{Cursor, Read, Write},
-    marker::PhantomData,
-};
+use crate::error::{ProtoErrorKind, ProtoErrorResultExt, Result};
+use crate::header::{AbstractNowHeader, NowHeader, NowLongHeader};
+use crate::message::{BodyType, MessageType, NowBody, NowMessage, NowVirtualChannel, VirtChannelsCtx};
+use crate::serialization::{Decode, Encode};
+use std::io::{Cursor, Read, Write};
+use std::marker::PhantomData;
 
 /// A raw now packet.
 ///

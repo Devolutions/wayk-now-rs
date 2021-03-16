@@ -66,3 +66,14 @@ macro_rules! __flags_struct {
         }
     };
 }
+
+// === STRINGIFY WRAPPERS ===
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __type_str {
+    ($typ:ty) => {{
+        let _ = |_: $typ| {};
+        stringify!($typ)
+    }};
+}

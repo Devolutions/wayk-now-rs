@@ -1,35 +1,29 @@
 mod authentication;
 mod config;
 
-use crate::{
-    authentication::AuthenticateSM,
-    config::{configure_available_auth_types, configure_capabilities, configure_channels_to_open},
-};
+use crate::authentication::AuthenticateSM;
+use crate::config::{configure_available_auth_types, configure_capabilities, configure_channels_to_open};
 use config::Cli;
-use std::{
-    convert::TryFrom,
-    io::{Read, Write},
-    net::{Shutdown, TcpStream},
-    rc::Rc,
-    str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::convert::TryFrom;
+use std::io::{Read, Write};
+use std::net::{Shutdown, TcpStream};
+use std::rc::Rc;
+use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 use structopt::StructOpt;
-use wayk_proto::{
-    channels_manager::ChannelsManager,
-    header::AbstractNowHeader,
-    message::{
-        ClipboardFormatDef, NowChatTextMsg, NowClipboardControlRspMsg, NowClipboardFormatDataReqMsg,
-        NowClipboardFormatDataRspMsgOwned, NowClipboardFormatListReqMsg, NowMessage, NowString256, NowString65535,
-    },
-    packet::{NowPacket, NowPacketAccumulator},
-    serialization::Encode,
-    sharee::{Sharee, ShareeCallbackTrait, ShareeResult},
-    sm::{
-        ChatChannelCallbackTrait, ChatChannelSM, ChatData, ChatDataRc, ClientConnectionSeqSM,
-        ClipboardChannelCallbackTrait, ClipboardChannelSM, ClipboardData, ClipboardDataRc, DummyConnectionSeqCallback,
-        VirtChannelSMResult,
-    },
+use wayk_proto::channels_manager::ChannelsManager;
+use wayk_proto::header::AbstractNowHeader;
+use wayk_proto::message::{
+    ClipboardFormatDef, NowChatTextMsg, NowClipboardControlRspMsg, NowClipboardFormatDataReqMsg,
+    NowClipboardFormatDataRspMsgOwned, NowClipboardFormatListReqMsg, NowMessage, NowString256, NowString65535,
+};
+use wayk_proto::packet::{NowPacket, NowPacketAccumulator};
+use wayk_proto::serialization::Encode;
+use wayk_proto::sharee::{Sharee, ShareeCallbackTrait, ShareeResult};
+use wayk_proto::sm::{
+    ChatChannelCallbackTrait, ChatChannelSM, ChatData, ChatDataRc, ClientConnectionSeqSM,
+    ClipboardChannelCallbackTrait, ClipboardChannelSM, ClipboardData, ClipboardDataRc, DummyConnectionSeqCallback,
+    VirtChannelSMResult,
 };
 
 fn main() {

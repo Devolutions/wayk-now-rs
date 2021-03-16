@@ -1,10 +1,6 @@
-use crate::{
-    error::*,
-    message::{NowString128, NowString16, NowString256, NowString32, NowString64},
-    serialization::{Decode, Encode},
-};
-use core::mem;
-use num_derive::FromPrimitive;
+use crate::error::*;
+use crate::message::{NowString128, NowString16, NowString256, NowString32, NowString64};
+use crate::serialization::{Decode, Encode};
 use std::io::{Cursor, Seek, SeekFrom, Write};
 
 // NOW_SYSTEM_INFO
@@ -99,10 +95,18 @@ pub enum OsInfoExtra {
     Android(OsInfoExtraAndroid),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SystemInfoType {
-    Os = 0x0001,
+    #[value = 0x0001]
+    Os,
+    #[fallback]
+    Other(u16),
+}
+
+impl SystemInfoType {
+    pub fn size() -> usize {
+        2
+    }
 }
 
 __flags_struct! {
@@ -112,23 +116,34 @@ __flags_struct! {
     }
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum OsType {
-    Windows = 0x01,
-    Mac = 0x02,
-    Linux = 0x03,
-    IOS = 0x04,
-    Android = 0x5,
+    #[value = 0x01]
+    Windows,
+    #[value = 0x02]
+    Mac,
+    #[value = 0x03]
+    Linux,
+    #[value = 0x04]
+    IOS,
+    #[value = 0x5]
+    Android,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum OsArch {
-    X86 = 0x01,
-    X64 = 0x02,
-    ARM = 0x03,
-    ARM64 = 0x04,
+    #[value = 0x01]
+    X86,
+    #[value = 0x02]
+    X64,
+    #[value = 0x03]
+    ARM,
+    #[value = 0x04]
+    ARM64,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Debug, Clone)]
@@ -224,7 +239,7 @@ impl Encode for NowSystemOsInfo {
 
 impl Decode<'_> for NowSystemOsInfo {
     fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
-        cursor.seek(SeekFrom::Current(mem::size_of::<SystemInfoType>() as i64))?;
+        cursor.seek(SeekFrom::Current(SystemInfoType::size() as i64))?;
 
         let flags = SystemOsInfoFlags::decode_from(cursor).or_desc("couldn't decode os info flags")?;
         let os_type = OsType::decode_from(cursor).or_desc("couldn't decode os type")?;
@@ -260,6 +275,7 @@ impl Decode<'_> for NowSystemOsInfo {
                 OsType::Linux => Some(OsInfoExtra::Linux(OsInfoExtraLinux::decode_from(cursor)?)),
                 OsType::IOS => Some(OsInfoExtra::IOS(OsInfoExtraIOS::decode_from(cursor)?)),
                 OsType::Android => Some(OsInfoExtra::Android(OsInfoExtraAndroid::decode_from(cursor)?)),
+                OsType::Other(_) => None,
             }
         } else {
             None
@@ -343,12 +359,16 @@ pub enum NowSystemInfo {
 
 // NOW_SYSTEM_MSG
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SystemMessageType {
-    InfoReq = 0x01,
-    InfoRsp = 0x02,
-    Shutdown = 0x03,
+    #[value = 0x01]
+    InfoReq,
+    #[value = 0x02]
+    InfoRsp,
+    #[value = 0x03]
+    Shutdown,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Debug, Decode, Encode, Clone)]

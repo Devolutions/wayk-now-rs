@@ -6,11 +6,10 @@ pub mod client_connection;
 pub use client_channels::*;
 pub use client_connection::*;
 
-use crate::{
-    error::ProtoError,
-    message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage, NowVirtualChannel},
-};
-use std::{cell::RefCell, rc::Rc};
+use crate::error::ProtoError;
+use crate::message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage, NowVirtualChannel};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 // === connection sequence ===
 

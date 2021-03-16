@@ -1,5 +1,4 @@
 use crate::message::{AccessControlCode, AccessFlags};
-use num_derive::FromPrimitive;
 
 __flags_struct! {
     AccessControlFlags: u8 => {
@@ -7,12 +6,16 @@ __flags_struct! {
     }
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum AccessControlMessageType {
-    Req = 0x01,
-    Rsp = 0x02,
-    Ntf = 0x03,
+    #[value = 0x01]
+    Req,
+    #[value = 0x02]
+    Rsp,
+    #[value = 0x03]
+    Ntf,
+    #[fallback]
+    Other(u8),
 }
 
 __flags_struct! {

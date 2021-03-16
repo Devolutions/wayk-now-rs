@@ -1,8 +1,6 @@
-use crate::{
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
-    message::{ChannelName, NowVirtualChannel},
-    sm::VirtualChannelSM,
-};
+use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::message::{ChannelName, NowVirtualChannel};
+use crate::sm::VirtualChannelSM;
 use alloc::collections::BTreeMap;
 
 pub type ChannelsManagerResult<'a> = Result<Option<(ChannelName, NowVirtualChannel<'a>)>, ProtoError>;
