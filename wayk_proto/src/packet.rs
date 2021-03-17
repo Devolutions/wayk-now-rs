@@ -2,8 +2,8 @@ use crate::error::{ProtoErrorKind, ProtoErrorResultExt, Result};
 use crate::header::{AbstractNowHeader, NowHeader, NowLongHeader};
 use crate::message::{BodyType, MessageType, NowBody, NowMessage, NowVirtualChannel, VirtChannelsCtx};
 use crate::serialization::{Decode, Encode};
+use core::marker::PhantomData;
 use std::io::{Cursor, Read, Write};
-use std::marker::PhantomData;
 
 /// A raw now packet.
 ///

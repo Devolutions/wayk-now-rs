@@ -2,11 +2,11 @@
 
 use crate::error::*;
 use crate::serialization::{Decode, Encode};
+use alloc::borrow::Cow;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use core::convert::TryFrom;
 use core::marker::PhantomData;
 use core::str::FromStr;
-use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
 
 pub trait NowStringSize {

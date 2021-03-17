@@ -49,7 +49,7 @@ mod parsed {
     pub struct MetaEnum<'a> {
         pub name: &'a syn::Ident,
         pub generics: &'a syn::Generics,
-        pub subtype_enum_ty: syn::Ident,
+        pub meta: syn::Meta,
         pub meta_variants: Vec<MetaVariant<'a>>,
     }
 
@@ -265,7 +265,16 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
         parsed::Type::MetaEnum(data) => {
             let ty = data.name;
             let generics = data.generics;
-            let subtype_enum_ty = &data.subtype_enum_ty;
+
+            let subtype_enum_ty = if let Meta::NameValue(name) = data.meta {
+                if let Lit::Str(s) = name.lit {
+                    Ident::new(&s.value(), Span::call_site())
+                } else {
+                    panic!("wrong literal in `meta_enum` attribute parameter. Expected a string literal for the subtype enum.");
+                }
+            } else {
+                panic!(r#"wrong meta for `meta_enum`. Expected a name value (eg: meta_enum = "...")."#);
+            };
 
             let variants: Vec<&Ident> = data
                 .meta_variants
@@ -396,15 +405,6 @@ where
                 let meta = meta_enum_attr
                     .parse_meta()
                     .expect("failed to parse `meta_enum` argument");
-                let subtype_enum_ty = if let Meta::NameValue(name) = meta {
-                    if let Lit::Str(s) = name.lit {
-                        Ident::new(&s.value(), Span::call_site())
-                    } else {
-                        panic!("wrong literal in `meta_enum` attribute parameter. Expected a string literal for the subtype enum.");
-                    }
-                } else {
-                    panic!(r#"wrong meta for `meta_enum`. Expected a name value (eg: meta_enum = "...")."#);
-                };
 
                 let meta_variants = data
                     .variants
@@ -424,7 +424,7 @@ where
                 parsed::Type::MetaEnum(parsed::MetaEnum {
                     name: ty,
                     generics,
-                    subtype_enum_ty,
+                    meta,
                     meta_variants,
                 })
             } else {

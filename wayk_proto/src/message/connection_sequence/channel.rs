@@ -1,6 +1,6 @@
-use std::borrow::{Borrow, Cow};
+use alloc::borrow::{Borrow, Cow};
+use core::str::FromStr;
 use std::io::{Cursor, Write};
-use std::str::FromStr;
 use wayk_proto::container::Vec8;
 use wayk_proto::error::Result;
 use wayk_proto::message::NowString64;

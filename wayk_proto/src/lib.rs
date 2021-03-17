@@ -10,6 +10,7 @@ extern crate wayk_proto_derive;
 #[macro_use]
 #[doc(hidden)]
 pub mod macros;
+
 pub mod auth;
 pub mod channels_manager;
 pub mod container;

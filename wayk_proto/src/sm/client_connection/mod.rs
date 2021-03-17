@@ -6,8 +6,8 @@ use crate::sm::{
     ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionSeqCallbackTrait,
     ConnectionState, DummyConnectionSM,
 };
-use std::cell::RefCell;
-use std::rc::Rc;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 pub struct ClientConnectionSeqSM<UserCallback> {
     user_callback: UserCallback,

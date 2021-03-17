@@ -86,7 +86,7 @@ impl OsInfoExtraAndroid {
 }
 
 #[derive(Debug, Clone, Encode)]
-#[meta_enum = "None"]
+#[meta_enum]
 pub enum OsInfoExtra {
     Windows(OsInfoExtraWindows),
     Mac(OsInfoExtraMac),
@@ -457,7 +457,7 @@ pub enum NowSystemMsg {
 mod tests {
     use super::*;
     use crate::serialization::{Decode, Encode};
-    use std::str::FromStr;
+    use core::str::FromStr;
 
     #[rustfmt::skip]
     const SYSTEM_OS_INFO: [u8; 120] = [

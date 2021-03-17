@@ -1,5 +1,5 @@
 use crate::message::NowString256;
-use std::str::FromStr;
+use core::str::FromStr;
 
 #[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SharingMessageType {
@@ -63,7 +63,7 @@ pub enum NowSharingMsg {
 mod tests {
     use super::*;
     use crate::serialization::{Decode, Encode};
-    use std::str::FromStr;
+    use core::str::FromStr;
 
     #[rustfmt::skip]
     const NOW_SHARING_SUSPEND_MSG: [u8; 6] = [

@@ -2,9 +2,9 @@ use super::{ConnectionSM, ConnectionSMResult};
 use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
 use crate::message::{NowActivateMsg, NowCapabilitiesMsg, NowMessage};
 use crate::sm::{ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionState};
+use alloc::rc::Rc;
+use core::cell::RefCell;
 use log::info;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 macro_rules! unexpected_call {
     ($sm_struct:ident, $self:ident, $method_name:literal) => {

@@ -98,7 +98,7 @@ impl VirtChannelsCtx {
 // == BODY TYPE == //
 
 #[derive(Debug, Clone, PartialEq, Copy, Eq, Encode)]
-#[meta_enum = "None"]
+#[meta_enum]
 pub enum BodyType {
     Message(MessageType),
     VirtualChannel(u8),
@@ -119,7 +119,7 @@ impl From<u8> for BodyType {
 // == NOW BODY == //
 
 #[derive(Debug, Clone, Encode)]
-#[meta_enum = "None"]
+#[meta_enum]
 pub enum NowBody<'a> {
     Message(NowMessage<'a>),
     VirtualChannel(NowVirtualChannel<'a>),
@@ -146,7 +146,7 @@ pub struct CustomVirtualChannel<'a> {
 }
 
 #[derive(Debug, Clone, Encode)]
-#[meta_enum = "None"]
+#[meta_enum]
 pub enum NowVirtualChannel<'a> {
     Clipboard(NowClipboardMsg<'a>),
     Chat(NowChatMsg),
@@ -318,7 +318,7 @@ impl<'a> From<CustomVirtualChannel<'a>> for NowVirtualChannel<'a> {
 // == NOW MESSAGE == //
 
 #[derive(Debug, Clone, Encode)]
-#[meta_enum = "None"]
+#[meta_enum]
 pub enum NowMessage<'a> {
     Handshake(NowHandshakeMsg),
     Negotiate(NowNegotiateMsg),

@@ -8,8 +8,8 @@ pub use client_connection::*;
 
 use crate::error::ProtoError;
 use crate::message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage, NowVirtualChannel};
-use std::cell::RefCell;
-use std::rc::Rc;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 // === connection sequence ===
 

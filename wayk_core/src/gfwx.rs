@@ -1,6 +1,6 @@
+use core::convert::TryFrom;
+use core::fmt;
 use gfwx::{Encoder, Filter, Header, Intent, Quantization};
-use std::convert::TryFrom;
-use std::fmt;
 use wayk_proto_derive::{Decode, Encode};
 
 #[derive(Debug, Clone)]
@@ -228,7 +228,9 @@ mod tests {
 
     #[test]
     fn header_decode() {
-        let header = EXPECTED_NOW_GFWX_HEADER.to_gfwx_header_with_params(NOW_GFWX_PARAMS).unwrap();
+        let header = EXPECTED_NOW_GFWX_HEADER
+            .to_gfwx_header_with_params(NOW_GFWX_PARAMS)
+            .unwrap();
 
         assert_eq!(header.version, HEADER.version);
         assert_eq!(header.width, HEADER.width);

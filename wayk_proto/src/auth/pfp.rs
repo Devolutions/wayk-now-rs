@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::message::{AuthType, NowAuthenticateMsg, NowAuthenticateTokenMsgOwned, NowString256, NowString64};
 use crate::serialization::Encode;
-use std::str::FromStr;
+use core::str::FromStr;
 
 #[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum PFPMessageType {
@@ -117,7 +117,7 @@ impl NowAuthPFPResponse {
 mod tests {
     use super::*;
     use crate::serialization::{Decode, Encode};
-    use std::str::FromStr;
+    use core::str::FromStr;
 
     #[rustfmt::skip]
     const PFP_NEGOTIATE_TOKEN: [u8; 26] = [

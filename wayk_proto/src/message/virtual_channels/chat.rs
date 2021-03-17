@@ -306,8 +306,8 @@ mod tests {
     use crate::message::{ChannelName, NowBody, NowVirtualChannel, VirtChannelsCtx};
     use crate::packet::NowPacket;
     use crate::serialization::{Decode, Encode};
+    use core::str::FromStr;
     use std::io::Cursor;
-    use std::str::FromStr;
 
     fn get_ctx() -> VirtChannelsCtx {
         let mut vchan_ctx = VirtChannelsCtx::new();

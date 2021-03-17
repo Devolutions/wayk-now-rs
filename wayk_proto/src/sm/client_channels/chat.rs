@@ -3,9 +3,9 @@ use crate::message::{
     ChannelName, ChatCapabilitiesFlags, NowChatMsg, NowChatSyncMsg, NowChatTextMsg, NowString65535, NowVirtualChannel,
 };
 use crate::sm::{VirtChannelSMResult, VirtualChannelSM};
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::str::FromStr;
+use alloc::rc::Rc;
+use core::cell::RefCell;
+use core::str::FromStr;
 
 pub type ChatDataRc = Rc<RefCell<ChatData>>;
 pub type TimestampFn = Box<dyn FnMut() -> u32>;
