@@ -1,7 +1,8 @@
 use crate::error::*;
+use crate::io::{Cursor, NoStdWrite};
 use crate::message::{BodyType, MessageType};
 use crate::serialization::{Decode, Encode};
-use std::io::{Cursor, Read, Write};
+use alloc::boxed::Box;
 
 const HEADER_VIRTUAL_CHANNEL_FLAG: u8 = 0x01;
 
@@ -22,12 +23,31 @@ pub enum NowHeader {
 }
 
 impl Decode<'_> for NowHeader {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
-        Self::read_from(cursor)
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self> {
+        let buffer = cursor
+            .peek_n(4)
+            .map_err(ProtoError::from)
+            .chain(ProtoErrorKind::Decoding(__type_str!(NowHeader)))
+            .or_desc("couldn't read short bit (no enough bytes provided")?;
+
+        let is_short = buffer[3] > 7;
+
+        if is_short {
+            Ok(NowHeader::Short(NowShortHeader::decode_from(cursor)?))
+        } else {
+            Ok(NowHeader::Long(NowLongHeader::decode_from(cursor)?))
+        }
     }
 }
 
 impl Encode for NowHeader {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         match self {
             NowHeader::Short(_) => NowShortHeader::SIZE,
@@ -35,7 +55,7 @@ impl Encode for NowHeader {
         }
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         match self {
             NowHeader::Short(header) => header.encode_into(writer),
             NowHeader::Long(header) => header.encode_into(writer),
@@ -60,7 +80,8 @@ impl NowHeader {
         Self::new(BodyType::VirtualChannel(channel_id), body_len)
     }
 
-    pub fn read_from<R: Read>(reader: &mut R) -> Result<Self> {
+    #[cfg(feature = "std")]
+    pub fn read_from<R: std::io::Read>(reader: &mut R) -> Result<Self> {
         let (bytes, short_bit) = {
             let mut buffer = vec![0u8; 4];
             reader
@@ -186,7 +207,7 @@ pub struct NowShortHeader {
 }
 
 impl Decode<'_> for NowShortHeader {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self> {
         let body_len = u16::decode_from(cursor)?;
         let body_type_raw = u8::decode_from(cursor)?;
         let flags = u8::decode_from(cursor)?;
@@ -261,7 +282,7 @@ pub struct NowLongHeader {
 }
 
 impl Decode<'_> for NowLongHeader {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self> {
         let body_len = u32::decode_from(cursor)?;
         let flags = u8::decode_from(cursor)?;
 

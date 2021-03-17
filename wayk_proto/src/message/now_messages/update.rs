@@ -45,6 +45,8 @@ pub enum NowUpdateMsg<'a> {
     UpdateGraphics(NowUpdateGraphicsMsg<'a>),
     UpdateRefresh(NowUpdateRefreshMsg),
     UpdateSuppress(NowUpdateSuppressMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[derive(Encode, Decode, Debug, Clone)]

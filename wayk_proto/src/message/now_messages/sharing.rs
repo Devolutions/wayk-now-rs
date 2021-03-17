@@ -54,9 +54,11 @@ pub struct NowSharingResumeMsg {
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "SharingMessageType"]
-pub enum NowSharingMsg {
+pub enum NowSharingMsg<'a> {
     Suspend(NowSharingSuspendMsg),
     Resume(NowSharingResumeMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[cfg(test)]

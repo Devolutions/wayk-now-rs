@@ -1,6 +1,6 @@
-use byteorder::ReadBytesExt;
+use crate::io::{Cursor, NoStdWrite};
+use alloc::vec::Vec;
 use core::mem;
-use std::io::{Cursor, Write};
 use wayk_proto::container::Vec16;
 use wayk_proto::error::*;
 use wayk_proto::message::connection_sequence::InputActionCode;
@@ -104,11 +104,18 @@ pub struct NowInputEventUnicode {
 }
 
 impl<'a> Encode for NowInputEventUnicode {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         mem::size_of::<u8>() + mem::size_of::<u8>() + self.code.len()
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         self.subtype.encode_into(writer)?;
         let flags = (self.code.len() as u8 - 1) << 6;
         flags.encode_into(writer)?;
@@ -118,7 +125,7 @@ impl<'a> Encode for NowInputEventUnicode {
 }
 
 impl<'dec: 'a, 'a> Decode<'dec> for NowInputEventUnicode {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let _subtype = cursor.read_u8()?;
         let flags = cursor.read_u8()?;
 
@@ -204,22 +211,24 @@ impl NowInputEventAction {
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "InputMessageType"]
-pub enum InputEvent {
+pub enum InputEvent<'a> {
     Mouse(NowInputEventMouse),
     Scroll(NowInputEventScroll),
     Keyboard(NowInputEventKeyboard),
     Unicode(NowInputEventUnicode),
     Toggle(NowInputEventToggle),
     Action(NowInputEventAction),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[derive(Encode, Decode, Clone, Debug)]
-pub struct NowInputMsg {
-    input_event: Vec16<InputEvent>,
+pub struct NowInputMsg<'a> {
+    input_event: Vec16<InputEvent<'a>>,
 }
 
-impl NowInputMsg {
-    pub fn new_with_events(input_event: Vec<InputEvent>) -> Self {
+impl<'a> NowInputMsg<'a> {
+    pub fn new_with_events(input_event: Vec<InputEvent<'a>>) -> Self {
         Self {
             input_event: Vec16(input_event),
         }
@@ -269,7 +278,7 @@ mod tests {
     #[test]
     fn input_event_mouse_decode_full_packet() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&MOUSE_POSITION_EVENT_FULL_PACKET[..]);
+        let mut reader = std::io::Cursor::new(&MOUSE_POSITION_EVENT_FULL_PACKET[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {

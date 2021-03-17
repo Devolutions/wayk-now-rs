@@ -9,6 +9,7 @@ pub use client_connection::*;
 use crate::error::ProtoError;
 use crate::message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage, NowVirtualChannel};
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 
 // === connection sequence ===

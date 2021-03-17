@@ -27,13 +27,15 @@ pub enum PFPMessageFlags {
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "PFPMessageType"]
-pub enum NowAuthPFP {
+pub enum NowAuthPFP<'a> {
     Negotiate(NowAuthPFPNegotiate),
     Challenge(NowAuthPFPChallenge),
     Response(NowAuthPFPResponse),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
-impl NowAuthPFP {
+impl NowAuthPFP<'_> {
     pub fn new_owned_negotiate_token<'a>(friendly_name: &str, friendly_text: &str) -> Result<NowAuthenticateMsg<'a>> {
         let negotiate_token = NowAuthPFPNegotiate::new(
             NowString64::from_str(friendly_name)?,

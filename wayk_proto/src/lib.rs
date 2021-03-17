@@ -1,4 +1,5 @@
-// for later no_std support
+#![cfg_attr(not(feature = "std"), no_std)]
+
 #[macro_use]
 extern crate alloc;
 
@@ -16,6 +17,7 @@ pub mod channels_manager;
 pub mod container;
 pub mod error;
 pub mod header;
+pub mod io;
 pub mod message;
 pub mod packet;
 pub mod serialization;

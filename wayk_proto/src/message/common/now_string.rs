@@ -1,13 +1,13 @@
 // NOW_STRING
 
 use crate::error::*;
+use crate::io::{Cursor, NoStdWrite};
 use crate::serialization::{Decode, Encode};
 use alloc::borrow::Cow;
-use byteorder::{ReadBytesExt, WriteBytesExt};
+use alloc::string::{String, ToString};
 use core::convert::TryFrom;
 use core::marker::PhantomData;
 use core::str::FromStr;
-use std::io::{Cursor, Read, Write};
 
 pub trait NowStringSize {
     const SIZE: usize;
@@ -44,7 +44,7 @@ where
     Size: NowStringSize,
     SizeType: Decode<'dec> + Into<usize>,
 {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let expected_size = SizeType::decode_from(cursor)?.into();
 
         if expected_size > Size::SIZE {
@@ -58,9 +58,8 @@ where
         }
 
         let string = {
-            let mut buffer = vec![0u8; expected_size];
-            cursor
-                .read_exact(&mut buffer)
+            let utf8_buf = cursor
+                .read_n(expected_size)
                 .map_err(ProtoError::from)
                 .chain(ProtoErrorKind::Decoding("NowString"))
                 .or_else_desc(|| {
@@ -70,9 +69,9 @@ where
                         expected_size
                     )
                 })?;
-            cursor.read_u8()?; // discard the null terminator
+            cursor.forward(1); // discard the null terminator
 
-            String::from_utf8(buffer)
+            String::from_utf8(utf8_buf.to_vec())
                 .map_err(ProtoError::from)
                 .chain(ProtoErrorKind::Decoding("NowString"))?
         };
@@ -87,13 +86,20 @@ where
 impl<Size, SizeType> Encode for NowString<Size, SizeType>
 where
     SizeType: Encode + TryFrom<usize>,
-    <SizeType as TryFrom<usize>>::Error: std::fmt::Debug,
+    <SizeType as TryFrom<usize>>::Error: core::fmt::Debug,
 {
-    fn encoded_len(&self) -> usize {
-        self.inner.len() + std::mem::size_of::<u8>() + std::mem::size_of::<SizeType>()
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encoded_len(&self) -> usize {
+        self.inner.len() + core::mem::size_of::<u8>() + core::mem::size_of::<SizeType>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         let bytes = self.inner.as_bytes();
         let len = SizeType::try_from(bytes.len()).unwrap(); // should never panic by construction
         len.encode_into(writer)?;
@@ -107,7 +113,7 @@ impl<Size, SizeType> NowString<Size, SizeType>
 where
     Size: NowStringSize,
     SizeType: Encode + TryFrom<usize>,
-    <SizeType as TryFrom<usize>>::Error: std::fmt::Debug,
+    <SizeType as TryFrom<usize>>::Error: core::fmt::Debug,
 {
     pub fn new_empty() -> Self {
         Self {
@@ -151,7 +157,7 @@ where
     }
 
     /// Encode an utf8 str into a now string
-    pub fn helper_write_into<W: Write>(writer: &mut W, s: &str) -> Result<()> {
+    pub fn helper_write_into<W: NoStdWrite>(writer: &mut W, s: &str) -> Result<()> {
         if s.len() > Size::SIZE {
             return ProtoError::new(ProtoErrorKind::Encoding("NowString")).or_else_desc(|| {
                 format!(
@@ -257,7 +263,7 @@ mod tests {
         let err = result.err().unwrap();
         assert_eq!(
             format!("{}", err),
-            "couldn't decode NowString [description: no enough bytes to parse the NowString64 (expected 8)] [source: io error: failed to fill whole buffer]"
+            "couldn't decode NowString [description: no enough bytes to parse the NowString64 (expected 8)] [source: io error: UnexpectedEof]"
         );
     }
 

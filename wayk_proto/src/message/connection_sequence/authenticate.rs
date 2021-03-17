@@ -1,5 +1,6 @@
 use crate::container::{Bytes16, Vec16};
 use crate::message::status::{AuthStatusCode, NowStatus};
+use alloc::vec::Vec;
 
 // TODO: check usage of this enum...
 // SRP message types
@@ -67,6 +68,8 @@ pub enum NowAuthenticateMsg<'a> {
     Token(NowAuthenticateTokenMsg<'a>),
     Success(NowAuthenticateSuccessMsg),
     Failure(NowAuthenticateFailureMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 
     #[decode_ignore]
     OwnedToken(NowAuthenticateTokenMsgOwned),

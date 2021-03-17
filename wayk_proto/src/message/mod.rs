@@ -12,9 +12,9 @@ pub use status::*;
 pub use virtual_channels::*;
 
 use crate::error::*;
-use crate::serialization::Decode;
+use crate::io::{Cursor, NoStdWrite};
+use crate::serialization::{Decode, Encode};
 use alloc::collections::BTreeMap;
-use std::io::Cursor;
 
 // == MESSAGE TYPE == //
 
@@ -97,11 +97,33 @@ impl VirtChannelsCtx {
 
 // == BODY TYPE == //
 
-#[derive(Debug, Clone, PartialEq, Copy, Eq, Encode)]
-#[meta_enum]
+#[derive(Debug, Clone, PartialEq, Copy, Eq)]
 pub enum BodyType {
     Message(MessageType),
     VirtualChannel(u8),
+}
+
+impl Encode for BodyType {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Known(1)
+    }
+
+    fn encoded_len(&self) -> usize {
+        1
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()>
+    where
+        Self: Sized,
+    {
+        match self {
+            Self::Message(v) => v.encode_into(writer),
+            Self::VirtualChannel(v) => v.encode_into(writer),
+        }
+    }
 }
 
 impl From<MessageType> for BodyType {
@@ -118,11 +140,36 @@ impl From<u8> for BodyType {
 
 // == NOW BODY == //
 
-#[derive(Debug, Clone, Encode)]
-#[meta_enum]
+#[derive(Debug, Clone)]
 pub enum NowBody<'a> {
     Message(NowMessage<'a>),
     VirtualChannel(NowVirtualChannel<'a>),
+}
+
+impl Encode for NowBody<'_> {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
+    fn encoded_len(&self) -> usize {
+        match self {
+            Self::Message(msg) => msg.encoded_len(),
+            Self::VirtualChannel(msg) => msg.encoded_len(),
+        }
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()>
+    where
+        Self: Sized,
+    {
+        match self {
+            Self::Message(msg) => msg.encode_into(writer),
+            Self::VirtualChannel(msg) => msg.encode_into(writer),
+        }
+    }
 }
 
 impl<'a> From<NowMessage<'a>> for NowBody<'a> {
@@ -145,25 +192,52 @@ pub struct CustomVirtualChannel<'a> {
     pub payload: &'a [u8],
 }
 
-#[derive(Debug, Clone, Encode)]
-#[meta_enum]
+#[derive(Debug, Clone)]
 pub enum NowVirtualChannel<'a> {
     Clipboard(NowClipboardMsg<'a>),
-    Chat(NowChatMsg),
+    Chat(NowChatMsg<'a>),
     // TODO: Exec(NowExecMsg),
     // TODO: FileTransfer(NowFileTransferMsg),
     // TODO: Tunnel(NowTunnelMsg),
     Custom(CustomVirtualChannel<'a>),
 }
 
+impl<'a> Encode for NowVirtualChannel<'a> {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
+    fn encoded_len(&self) -> usize {
+        match self {
+            Self::Clipboard(msg) => msg.encoded_len(),
+            Self::Chat(msg) => msg.encoded_len(),
+            Self::Custom(msg) => msg.encoded_len(),
+        }
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()>
+    where
+        Self: Sized,
+    {
+        match self {
+            Self::Clipboard(msg) => msg.encode_into(writer),
+            Self::Chat(msg) => msg.encode_into(writer),
+            Self::Custom(msg) => msg.encode_into(writer),
+        }
+    }
+}
+
 impl<'a> NowVirtualChannel<'a> {
-    pub fn decode_from<'dec: 'a>(channel: &ChannelName, cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    pub fn decode_from<'dec: 'a>(channel: &ChannelName, cursor: &mut Cursor<'dec>) -> Result<Self> {
         Ok(match channel {
             ChannelName::Clipboard => Self::Clipboard(NowClipboardMsg::decode_from(cursor)?),
             ChannelName::Chat => Self::Chat(NowChatMsg::decode_from(cursor)?),
             _ => Self::Custom(CustomVirtualChannel {
                 name: channel.clone(),
-                payload: &cursor.get_ref()[cursor.position() as usize..],
+                payload: cursor.read_rest()?,
             }),
         })
     }
@@ -261,8 +335,8 @@ impl From<NowClipboardFormatDataRspMsgOwned> for NowVirtualChannel<'_> {
     }
 }
 
-impl From<NowChatMsg> for NowVirtualChannel<'_> {
-    fn from(msg: NowChatMsg) -> Self {
+impl<'a> From<NowChatMsg<'a>> for NowVirtualChannel<'a> {
+    fn from(msg: NowChatMsg<'a>) -> Self {
         Self::Chat(msg)
     }
 }
@@ -317,27 +391,79 @@ impl<'a> From<CustomVirtualChannel<'a>> for NowVirtualChannel<'a> {
 
 // == NOW MESSAGE == //
 
-#[derive(Debug, Clone, Encode)]
-#[meta_enum]
+#[derive(Debug, Clone)]
 pub enum NowMessage<'a> {
     Handshake(NowHandshakeMsg),
     Negotiate(NowNegotiateMsg),
     Authenticate(NowAuthenticateMsg<'a>),
-    Associate(NowAssociateMsg),
+    Associate(NowAssociateMsg<'a>),
     Capabilities(NowCapabilitiesMsg<'a>),
     Channel(NowChannelMsg),
     Activate(NowActivateMsg),
     Terminate(NowTerminateMsg),
-    Input(NowInputMsg),
-    Surface(NowSurfaceMsg),
+    Input(NowInputMsg<'a>),
+    Surface(NowSurfaceMsg<'a>),
     Update(NowUpdateMsg<'a>),
-    System(NowSystemMsg),
-    Sharing(NowSharingMsg),
-    Access(NowAccessMsg),
+    System(NowSystemMsg<'a>),
+    Sharing(NowSharingMsg<'a>),
+    Access(NowAccessMsg<'a>),
+    Custom { ty: MessageType, payload: &'a [u8] },
+}
+
+impl<'a> Encode for NowMessage<'a> {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
+    fn encoded_len(&self) -> usize {
+        match self {
+            NowMessage::Handshake(m) => m.encoded_len(),
+            NowMessage::Negotiate(m) => m.encoded_len(),
+            NowMessage::Authenticate(m) => m.encoded_len(),
+            NowMessage::Associate(m) => m.encoded_len(),
+            NowMessage::Capabilities(m) => m.encoded_len(),
+            NowMessage::Channel(m) => m.encoded_len(),
+            NowMessage::Activate(m) => m.encoded_len(),
+            NowMessage::Terminate(m) => m.encoded_len(),
+            NowMessage::Input(m) => m.encoded_len(),
+            NowMessage::Surface(m) => m.encoded_len(),
+            NowMessage::Update(m) => m.encoded_len(),
+            NowMessage::System(m) => m.encoded_len(),
+            NowMessage::Sharing(m) => m.encoded_len(),
+            NowMessage::Access(m) => m.encoded_len(),
+            NowMessage::Custom { payload, .. } => payload.len(),
+        }
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
+        match self {
+            NowMessage::Handshake(m) => m.encode_into(writer),
+            NowMessage::Negotiate(m) => m.encode_into(writer),
+            NowMessage::Authenticate(m) => m.encode_into(writer),
+            NowMessage::Associate(m) => m.encode_into(writer),
+            NowMessage::Capabilities(m) => m.encode_into(writer),
+            NowMessage::Channel(m) => m.encode_into(writer),
+            NowMessage::Activate(m) => m.encode_into(writer),
+            NowMessage::Terminate(m) => m.encode_into(writer),
+            NowMessage::Input(m) => m.encode_into(writer),
+            NowMessage::Surface(m) => m.encode_into(writer),
+            NowMessage::Update(m) => m.encode_into(writer),
+            NowMessage::System(m) => m.encode_into(writer),
+            NowMessage::Sharing(m) => m.encode_into(writer),
+            NowMessage::Access(m) => m.encode_into(writer),
+            NowMessage::Custom { payload, .. } => {
+                writer.write_all(payload)?;
+                Ok(())
+            }
+        }
+    }
 }
 
 impl<'a> NowMessage<'a> {
-    pub fn decode_from<'dec: 'a>(msg_type: MessageType, cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    pub fn decode_from<'dec: 'a>(msg_type: MessageType, cursor: &mut Cursor<'dec>) -> Result<Self> {
         Ok(match msg_type {
             MessageType::Handshake => Self::Handshake(NowHandshakeMsg::decode_from(cursor)?),
             MessageType::Negotiate => Self::Negotiate(NowNegotiateMsg::decode_from(cursor)?),
@@ -353,19 +479,10 @@ impl<'a> NowMessage<'a> {
             MessageType::Input => Self::Input(NowInputMsg::decode_from(cursor)?),
             MessageType::Sharing => Self::Sharing(NowSharingMsg::decode_from(cursor)?),
             MessageType::Access => Self::Access(NowAccessMsg::decode_from(cursor)?),
-
-            MessageType::Status => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
-                .or_desc("Status message type not yet supported")?,
-            MessageType::Mouse => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
-                .or_desc("Mouse message type not yet supported")?,
-            MessageType::Network => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
-                .or_desc("Network message type not yet supported")?,
-            MessageType::Desktop => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
-                .or_desc("Desktop message type not yet supported")?,
-            MessageType::Session => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
-                .or_desc("Session message type not yet supported")?,
-            MessageType::Other(v) => ProtoError::new(ProtoErrorKind::Decoding(__type_str!(NowMessage)))
-                .or_desc(format!("Message type {} not yet supported", v))?,
+            _ => {
+                let payload = cursor.read_rest()?;
+                Self::Custom { ty: msg_type, payload }
+            }
         })
     }
 
@@ -385,6 +502,7 @@ impl<'a> NowMessage<'a> {
             NowMessage::System(_) => MessageType::System,
             NowMessage::Sharing(_) => MessageType::Sharing,
             NowMessage::Access(_) => MessageType::Sharing,
+            NowMessage::Custom { ty, .. } => *ty,
         }
     }
 }
@@ -407,8 +525,8 @@ impl<'a> From<NowAuthenticateMsg<'a>> for NowMessage<'a> {
     }
 }
 
-impl From<NowAssociateMsg> for NowMessage<'_> {
-    fn from(msg: NowAssociateMsg) -> Self {
+impl<'a> From<NowAssociateMsg<'a>> for NowMessage<'a> {
+    fn from(msg: NowAssociateMsg<'a>) -> Self {
         Self::Associate(msg)
     }
 }
@@ -437,14 +555,14 @@ impl From<NowTerminateMsg> for NowMessage<'_> {
     }
 }
 
-impl From<NowInputMsg> for NowMessage<'_> {
-    fn from(msg: NowInputMsg) -> Self {
+impl<'a> From<NowInputMsg<'a>> for NowMessage<'a> {
+    fn from(msg: NowInputMsg<'a>) -> Self {
         Self::Input(msg)
     }
 }
 
-impl From<NowSurfaceMsg> for NowMessage<'_> {
-    fn from(msg: NowSurfaceMsg) -> Self {
+impl<'a> From<NowSurfaceMsg<'a>> for NowMessage<'a> {
+    fn from(msg: NowSurfaceMsg<'a>) -> Self {
         Self::Surface(msg)
     }
 }
@@ -455,20 +573,20 @@ impl<'a> From<NowUpdateMsg<'a>> for NowMessage<'a> {
     }
 }
 
-impl From<NowSystemMsg> for NowMessage<'_> {
-    fn from(msg: NowSystemMsg) -> Self {
+impl<'a> From<NowSystemMsg<'a>> for NowMessage<'a> {
+    fn from(msg: NowSystemMsg<'a>) -> Self {
         Self::System(msg)
     }
 }
 
-impl From<NowSharingMsg> for NowMessage<'_> {
-    fn from(msg: NowSharingMsg) -> Self {
+impl<'a> From<NowSharingMsg<'a>> for NowMessage<'a> {
+    fn from(msg: NowSharingMsg<'a>) -> Self {
         Self::Sharing(msg)
     }
 }
 
-impl From<NowAccessMsg> for NowMessage<'_> {
-    fn from(msg: NowAccessMsg) -> Self {
+impl<'a> From<NowAccessMsg<'a>> for NowMessage<'a> {
+    fn from(msg: NowAccessMsg<'a>) -> Self {
         Self::Access(msg)
     }
 }

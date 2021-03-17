@@ -21,6 +21,8 @@ mod parsed {
         MetaEnum(MetaEnum<'a>),
     }
 
+    // == Basic struct == //
+
     pub struct Struct<'a> {
         pub name: &'a syn::Ident,
         pub generics: &'a syn::Generics,
@@ -34,10 +36,7 @@ mod parsed {
         pub ty: &'a syn::Type,
     }
 
-    pub struct VariantWithValue<'a> {
-        pub ident: &'a syn::Ident,
-        pub value: syn::LitInt,
-    }
+    // == Trivial Enum with fallback == //
 
     pub struct EnumWithFallback<'a> {
         pub name: &'a syn::Ident,
@@ -46,14 +45,22 @@ mod parsed {
         pub fallback_variant: &'a syn::Ident,
     }
 
+    pub struct VariantWithValue<'a> {
+        pub ident: &'a syn::Ident,
+        pub value: syn::LitInt,
+    }
+
+    // == Meta Enum == //
+
     pub struct MetaEnum<'a> {
         pub name: &'a syn::Ident,
         pub generics: &'a syn::Generics,
         pub meta: syn::Meta,
-        pub meta_variants: Vec<MetaVariant<'a>>,
+        pub variants: Vec<MetaEnumVariant<'a>>,
+        pub fallback_variant_ident: &'a syn::Ident,
     }
 
-    pub struct MetaVariant<'a> {
+    pub struct MetaEnumVariant<'a> {
         pub decode_ignore: bool,
         pub encode_ignore: bool,
         pub name: &'a syn::Ident,
@@ -72,23 +79,42 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
         parsed::Type::Struct(data) => {
             let ty = data.name;
             let (impl_generics, ty_generics, where_clause) = data.generics.split_for_impl();
-            let fields = data
+
+            let fields: Vec<&Ident> = data
                 .fields
                 .iter()
                 .filter(|field| !field.encode_ignore)
                 .map(|field| field.name)
-                .collect::<Vec<&Ident>>();
+                .collect();
+
+            let types: Vec<&Type> = data
+                .fields
+                .iter()
+                .filter(|field| !field.encode_ignore)
+                .map(|field| field.ty)
+                .collect();
 
             let expanded = quote! {
                 impl #impl_generics ::wayk_proto::serialization::Encode for #ty #ty_generics #where_clause {
+                    fn expected_size() -> ::wayk_proto::serialization::ExpectedSize {
+                        use ::wayk_proto::serialization::ExpectedSize;
+                        ExpectedSize::Known( #(
+                            if let ExpectedSize::Known(v) = <#types as ::wayk_proto::serialization::Encode>::expected_size() {
+                                v
+                            } else {
+                                return ExpectedSize::Variable;
+                            }
+                        )+* )
+                    }
+
                     fn encoded_len(&self) -> usize {
                         #(
                             self.#fields.encoded_len()
                         )+*
                     }
 
-                    fn encode_into<W: ::std::io::Write>(&self, writer: &mut W) -> ::core::result::Result<(), ::wayk_proto::error::ProtoError> {
-                        use ::wayk_proto::error::{ProtoErrorKind, ProtoErrorResultExt};
+                    fn encode_into<W: ::wayk_proto::io::NoStdWrite>(&self, writer: &mut W) -> ::core::result::Result<(), ::wayk_proto::error::ProtoError> {
+                        use ::wayk_proto::error::{ProtoErrorKind, ProtoErrorResultExt as _};
                         #(
                             self.#fields.encode_into(writer)
                                 .chain(ProtoErrorKind::Encoding(stringify!(#ty)))
@@ -104,9 +130,10 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
         parsed::Type::MetaEnum(data) => {
             let ty = data.name;
             let (impl_generics, ty_generics, where_clause) = data.generics.split_for_impl();
+            let fallback_variant_ident = data.fallback_variant_ident;
 
             let variants: Vec<&Ident> = data
-                .meta_variants
+                .variants
                 .iter()
                 .filter(|variant| !variant.encode_ignore)
                 .map(|variant| variant.name)
@@ -114,16 +141,21 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
 
             let expanded = quote! {
                 impl #impl_generics ::wayk_proto::serialization::Encode for #ty #ty_generics #where_clause {
+                    fn expected_size() -> ::wayk_proto::serialization::ExpectedSize {
+                        ::wayk_proto::serialization::ExpectedSize::Variable
+                    }
+
                     fn encoded_len(&self) -> usize {
                         match self {
                             #(
                                 Self::#variants(msg) => msg.encoded_len(),
                             )*
+                            Self::#fallback_variant_ident(msg) => msg.len(),
                         }
                     }
 
-                    fn encode_into<W: ::std::io::Write>(&self, writer: &mut W) -> ::core::result::Result<(), ::wayk_proto::error::ProtoError> {
-                        use ::wayk_proto::error::{ProtoErrorKind, ProtoErrorResultExt};
+                    fn encode_into<W: ::wayk_proto::io::NoStdWrite>(&self, writer: &mut W) -> ::core::result::Result<(), ::wayk_proto::error::ProtoError> {
+                        use ::wayk_proto::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt as _};
                         match self {
                             #(
                                 Self::#variants(msg) => msg
@@ -131,6 +163,10 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
                                     .chain(ProtoErrorKind::Encoding(stringify!(#ty)))
                                     .or_desc(concat!("couldn't encode ", stringify!(#variants)," message")),
                             )*
+                            Self::#fallback_variant_ident(msg) => writer.write_all(msg)
+                                .map_err(ProtoError::from)
+                                .chain(ProtoErrorKind::Encoding(stringify!(#ty)))
+                                .or_desc("couldn't encode custom message"),
                         }
                     }
                 }
@@ -149,11 +185,15 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
 
             let expanded = quote! {
                 impl ::wayk_proto::serialization::Encode for #ty {
+                    fn expected_size() -> ::wayk_proto::serialization::ExpectedSize {
+                        ::wayk_proto::serialization::ExpectedSize::Known(::core::mem::size_of::<#underlying_repr>())
+                    }
+
                     fn encoded_len(&self) -> usize {
                         ::core::mem::size_of::<#underlying_repr>()
                     }
 
-                    fn encode_into<W: ::std::io::Write>(
+                    fn encode_into<W: ::wayk_proto::io::NoStdWrite>(
                         &self,
                         writer: &mut W,
                     ) -> ::core::result::Result<(), ::wayk_proto::error::ProtoError> {
@@ -161,7 +201,7 @@ fn impl_encode(ty: parsed::Type<'_>) -> TokenStream {
                     }
                 }
 
-                impl ::std::convert::From<#ty> for #underlying_repr {
+                impl ::core::convert::From<#ty> for #underlying_repr {
                     fn from(
                         v: #ty,
                     ) -> #underlying_repr {
@@ -239,8 +279,8 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
 
             let expanded = quote! {
                 impl #impl_generics ::wayk_proto::serialization::Decode<'dec> for #ty #ty_generics #where_clause {
-                    fn decode_from(cursor: &mut ::std::io::Cursor<&'dec [u8]>) -> ::core::result::Result<Self, ::wayk_proto::error::ProtoError> {
-                        use ::wayk_proto::error::{ProtoErrorResultExt, ProtoErrorKind};
+                    fn decode_from(cursor: &mut ::wayk_proto::io::Cursor<'dec>) -> ::core::result::Result<Self, ::wayk_proto::error::ProtoError> {
+                        use ::wayk_proto::error::{ProtoErrorResultExt as _, ProtoErrorKind};
                         Ok(Self {
                             #(
                                 #fields: <#fields_ty as ::wayk_proto::serialization::Decode>::decode_from(cursor)
@@ -265,6 +305,7 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
         parsed::Type::MetaEnum(data) => {
             let ty = data.name;
             let generics = data.generics;
+            let fallback_variant_ident = data.fallback_variant_ident;
 
             let subtype_enum_ty = if let Meta::NameValue(name) = data.meta {
                 if let Lit::Str(s) = name.lit {
@@ -277,13 +318,13 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
             };
 
             let variants: Vec<&Ident> = data
-                .meta_variants
+                .variants
                 .iter()
                 .filter(|variant| !variant.decode_ignore)
                 .map(|variant| variant.name)
                 .collect();
             let variants_field_ty: Vec<&Type> = data
-                .meta_variants
+                .variants
                 .iter()
                 .filter(|variant| !variant.decode_ignore)
                 .map(|variant| variant.field_type)
@@ -294,16 +335,14 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
 
             let expanded = quote! {
                 impl #impl_generics ::wayk_proto::serialization::Decode<'dec> for #ty #ty_generics #where_clause {
-                    fn decode_from(cursor: &mut ::std::io::Cursor<&'dec [u8]>) -> ::core::result::Result<Self, ::wayk_proto::error::ProtoError> {
-                        use ::wayk_proto::error::{ProtoError, ProtoErrorResultExt, ProtoErrorKind};
+                    fn decode_from(cursor: &mut ::wayk_proto::io::Cursor<'dec>) -> ::core::result::Result<Self, ::wayk_proto::error::ProtoError> {
+                        use ::wayk_proto::error::{ProtoError, ProtoErrorResultExt as _, ProtoErrorKind};
                         use ::wayk_proto::serialization::Encode;
-                        use ::std::io::{Seek, SeekFrom};
 
                         let subtype = <#subtype_enum_ty as ::wayk_proto::serialization::Decode>::decode_from(cursor)
                             .chain(ProtoErrorKind::Decoding(stringify!(#ty)))
                             .or_desc("couldn't decode subtype")?;
-                        cursor.seek(SeekFrom::Current(-(subtype.encoded_len() as i64)))
-                            .expect("seek back after subtype decoding failed"); // cannot fail
+                        cursor.rewind(subtype.encoded_len());
 
                         match subtype {
                             #(
@@ -317,8 +356,11 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
                                         stringify!(#variants)
                                     )),
                             )*
-                            _ => ProtoError::new(ProtoErrorKind::Decoding(stringify!(#ty)))
-                                .or_desc(format!("unsupported subtype: {:?}", subtype)),
+                            _ => cursor.peek_rest()
+                                .map_err(ProtoError::from)
+                                .chain(ProtoErrorKind::Encoding(stringify!(#ty)))
+                                .or_desc("couldn't decode custom message")
+                                .map(Self::#fallback_variant_ident),
                         }
                     }
                 }
@@ -338,14 +380,14 @@ fn impl_decode(enc_dec_ty: parsed::Type<'_>) -> TokenStream {
             let expanded = quote! {
                 impl ::wayk_proto::serialization::Decode<'_> for #ty {
                     fn decode_from(
-                        cursor: &mut ::std::io::Cursor<&[u8]>,
+                        cursor: &mut ::wayk_proto::io::Cursor<'_>,
                     ) -> ::core::result::Result<Self, ::wayk_proto::error::ProtoError> {
                         let v = #underlying_repr::decode_from(cursor)?;
                         Ok(#ty::from(v))
                     }
                 }
 
-                impl ::std::convert::From<#underlying_repr> for #ty {
+                impl ::core::convert::From<#underlying_repr> for #ty {
                     fn from(
                         v: #underlying_repr,
                     ) -> Self {
@@ -406,26 +448,46 @@ where
                     .parse_meta()
                     .expect("failed to parse `meta_enum` argument");
 
-                let meta_variants = data
+                let variants = data
                     .variants
                     .iter()
-                    .map(|variant| parsed::MetaVariant {
-                        decode_ignore: find_attr(&variant.attrs, "decode_ignore").is_some(),
-                        encode_ignore: find_attr(&variant.attrs, "encode_ignore").is_some(),
-                        name: &variant.ident,
-                        field_type: match &variant.fields {
-                            Fields::Unnamed(field) => &field.unnamed.first().unwrap().ty,
+                    .filter_map(|v| {
+                        if find_attr(&v.attrs, "fallback").is_some() {
+                            return None;
+                        }
+
+                        let field_type = match &v.fields {
+                            Fields::Unnamed(fields) => &fields.unnamed.first().unwrap().ty,
                             Fields::Named(_) => panic!("named fields unsupported"),
                             Fields::Unit => panic!("unexpected unit field"),
-                        },
+                        };
+
+                        Some(parsed::MetaEnumVariant {
+                            decode_ignore: find_attr(&v.attrs, "decode_ignore").is_some(),
+                            encode_ignore: find_attr(&v.attrs, "encode_ignore").is_some(),
+                            name: &v.ident,
+                            field_type,
+                        })
                     })
                     .collect();
+
+                let fallback_variant_ident = data
+                    .variants
+                    .iter()
+                    .find(|v| find_attr(&v.attrs, "fallback").is_some())
+                    .map(|v| match &v.fields {
+                        Fields::Unnamed(_) => &v.ident,
+                        Fields::Named(_) => panic!("unexpected named field"),
+                        Fields::Unit => panic!("unexpected unit field"),
+                    })
+                    .expect("fallback variant missing");
 
                 parsed::Type::MetaEnum(parsed::MetaEnum {
                     name: ty,
                     generics,
                     meta,
-                    meta_variants,
+                    variants,
+                    fallback_variant_ident,
                 })
             } else {
                 let variants = data

@@ -24,7 +24,7 @@ pub enum ChatMessageType {
 
 #[derive(Encode, Decode, Debug, Clone)]
 #[meta_enum = "ChatMessageType"]
-pub enum NowChatMsg {
+pub enum NowChatMsg<'a> {
     Sync(NowChatSyncMsg),
     Text(NowChatTextMsg),
     Read(NowChatReadMsg),
@@ -32,45 +32,47 @@ pub enum NowChatMsg {
     Name(NowChatNameMsg),
     Status(NowChatStatusMsg),
     Poke(NowChatPokeMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
-impl From<NowChatSyncMsg> for NowChatMsg {
+impl From<NowChatSyncMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatSyncMsg) -> Self {
         Self::Sync(msg)
     }
 }
 
-impl From<NowChatTextMsg> for NowChatMsg {
+impl From<NowChatTextMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatTextMsg) -> Self {
         Self::Text(msg)
     }
 }
 
-impl From<NowChatReadMsg> for NowChatMsg {
+impl From<NowChatReadMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatReadMsg) -> Self {
         Self::Read(msg)
     }
 }
 
-impl From<NowChatTypingMsg> for NowChatMsg {
+impl From<NowChatTypingMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatTypingMsg) -> Self {
         Self::Typing(msg)
     }
 }
 
-impl From<NowChatNameMsg> for NowChatMsg {
+impl From<NowChatNameMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatNameMsg) -> Self {
         Self::Name(msg)
     }
 }
 
-impl From<NowChatStatusMsg> for NowChatMsg {
+impl From<NowChatStatusMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatStatusMsg) -> Self {
         Self::Status(msg)
     }
 }
 
-impl From<NowChatPokeMsg> for NowChatMsg {
+impl From<NowChatPokeMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatPokeMsg) -> Self {
         Self::Poke(msg)
     }

@@ -1,6 +1,7 @@
+use crate::io::{Cursor, NoStdWrite};
 use alloc::borrow::{Borrow, Cow};
+use alloc::vec::Vec;
 use core::str::FromStr;
-use std::io::{Cursor, Write};
 use wayk_proto::container::Vec8;
 use wayk_proto::error::Result;
 use wayk_proto::message::NowString64;
@@ -75,6 +76,13 @@ pub enum ChannelName {
 }
 
 impl Encode for ChannelName {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         let name = match self {
             ChannelName::Unknown(name) => name.borrow(),
@@ -87,7 +95,7 @@ impl Encode for ChannelName {
         name.len() + 2
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         let name = NowString64::from_str(self.as_str())?;
         name.encode_into(writer)?;
         Ok(())
@@ -95,7 +103,7 @@ impl Encode for ChannelName {
 }
 
 impl<'dec: 'a, 'a> Decode<'dec> for ChannelName {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let name = NowString64::decode_from(cursor)?;
         match name.as_str() {
             Self::CLIPBOARD_STR => Ok(Self::Clipboard),
@@ -160,7 +168,7 @@ mod tests {
     #[test]
     fn full_decode() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&CHANNEL_LIST_REQUEST_PACKET[..]);
+        let mut reader = std::io::Cursor::new(&CHANNEL_LIST_REQUEST_PACKET[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {

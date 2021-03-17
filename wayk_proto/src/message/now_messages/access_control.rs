@@ -73,10 +73,12 @@ pub struct NowAcessControlNtf {
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "AccessControlMessageType"]
-pub enum NowAccessMsg {
+pub enum NowAccessMsg<'a> {
     Req(NowAcessControlReq),
     Rsp(NowAcessControlRsp),
     Ntf(NowAcessControlNtf),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[cfg(test)]

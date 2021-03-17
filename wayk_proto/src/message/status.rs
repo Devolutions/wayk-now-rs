@@ -1,8 +1,8 @@
 use crate::error::*;
+use crate::io::{Cursor, NoStdWrite};
 use crate::serialization::{Decode, Encode};
 use core::convert::TryFrom;
 use core::fmt;
-use std::io::{Cursor, Write};
 
 // NSTATUS
 
@@ -59,11 +59,18 @@ impl<CodeType> Encode for NowStatus<CodeType>
 where
     CodeType: From<u16> + Into<u16> + Copy,
 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<u32>()
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Known(core::mem::size_of::<u32>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<u32>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         self.repr.encode_into(writer)
     }
 }
@@ -72,7 +79,7 @@ impl<CodeType> Decode<'_> for NowStatus<CodeType>
 where
     CodeType: From<u16> + Into<u16> + Copy,
 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self> {
         let repr = u32::decode_from(cursor)?;
         Self::from_u32(repr)
     }

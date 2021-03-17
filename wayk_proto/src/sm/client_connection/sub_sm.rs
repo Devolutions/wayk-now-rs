@@ -1,8 +1,10 @@
 use super::{ConnectionSM, ConnectionSMResult};
+use crate::alloc::string::ToString;
 use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
 use crate::message::{NowActivateMsg, NowCapabilitiesMsg, NowMessage};
 use crate::sm::{ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionState};
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 use log::info;
 

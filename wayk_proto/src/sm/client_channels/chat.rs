@@ -1,9 +1,12 @@
+use crate::alloc::borrow::ToOwned;
 use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
 use crate::message::{
     ChannelName, ChatCapabilitiesFlags, NowChatMsg, NowChatSyncMsg, NowChatTextMsg, NowString65535, NowVirtualChannel,
 };
 use crate::sm::{VirtChannelSMResult, VirtualChannelSM};
+use alloc::boxed::Box;
 use alloc::rc::Rc;
+use alloc::string::String;
 use core::cell::RefCell;
 use core::str::FromStr;
 

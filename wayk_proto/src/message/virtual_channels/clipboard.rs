@@ -2,6 +2,7 @@
 
 use crate::container::{Bytes32, Vec32, Vec8};
 use crate::message::NowString256;
+use alloc::vec::Vec;
 
 #[derive(Encode, Decode, Debug, Clone, Copy, PartialEq)]
 pub enum ClipboardMessageType {
@@ -78,6 +79,8 @@ pub enum NowClipboardMsg<'a> {
     FormatListRsp(NowClipboardFormatListRspMsg),
     FormatDataReq(NowClipboardFormatDataReqMsg),
     FormatDataRsp(NowClipboardFormatDataRspMsg<'a>),
+    #[fallback]
+    Custom(&'a [u8]),
 
     #[decode_ignore]
     FormatDataRspOwned(NowClipboardFormatDataRspMsgOwned),

@@ -12,4 +12,3 @@ repository = "https://github.com/Devolutions/wayk-now-rs"
 wayk_proto = {version = "0.2", path = "../wayk_proto" }
 wayk_proto_derive = {version = "0.2",  path = "../wayk_proto_derive"}
 gfwx = { version = "0.3", default-features = false }
-

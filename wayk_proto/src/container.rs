@@ -1,89 +1,96 @@
 macro_rules! impl_container {
     ($ty:ident as Vec with $size_ty:ident) => {
         #[derive(PartialEq, Debug, Clone)]
-        pub struct $ty<Item>(pub Vec<Item>);
+        pub struct $ty<Item>(pub ::alloc::vec::Vec<Item>);
 
-        impl<Item> core::ops::Deref for $ty<Item> {
-            type Target = Vec<Item>;
+        impl<Item> ::core::ops::Deref for $ty<Item> {
+            type Target = ::alloc::vec::Vec<Item>;
 
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
 
-        impl<Item> core::ops::DerefMut for $ty<Item> {
+        impl<Item> ::core::ops::DerefMut for $ty<Item> {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.0
             }
         }
 
-        impl<Item> core::iter::IntoIterator for $ty<Item> {
+        impl<Item> ::core::iter::IntoIterator for $ty<Item> {
             type Item = Item;
-            type IntoIter = alloc::vec::IntoIter<Self::Item>;
+            type IntoIter = ::alloc::vec::IntoIter<Self::Item>;
 
             fn into_iter(self) -> Self::IntoIter {
                 self.0.into_iter()
             }
         }
 
-        impl<'a, Item> core::iter::IntoIterator for &'a $ty<Item> {
+        impl<'a, Item> ::core::iter::IntoIterator for &'a $ty<Item> {
             type Item = &'a Item;
-            type IntoIter = alloc::slice::Iter<'a, Item>;
+            type IntoIter = ::alloc::slice::Iter<'a, Item>;
 
             fn into_iter(self) -> Self::IntoIter {
                 self.0.iter()
             }
         }
 
-        impl<'a, Item> core::iter::IntoIterator for &'a mut $ty<Item> {
+        impl<'a, Item> ::core::iter::IntoIterator for &'a mut $ty<Item> {
             type Item = &'a mut Item;
-            type IntoIter = alloc::slice::IterMut<'a, Item>;
+            type IntoIter = ::alloc::slice::IterMut<'a, Item>;
 
             fn into_iter(self) -> Self::IntoIter {
                 self.0.iter_mut()
             }
         }
 
-        impl<Item> From<Vec<Item>> for $ty<Item> {
-            fn from(v: Vec<Item>) -> Self {
+        impl<Item> From<::alloc::vec::Vec<Item>> for $ty<Item> {
+            fn from(v: ::alloc::vec::Vec<Item>) -> Self {
                 Self(v)
             }
         }
 
-        impl<Item> Into<Vec<Item>> for $ty<Item> {
-            fn into(self) -> Vec<Item> {
+        impl<Item> Into<::alloc::vec::Vec<Item>> for $ty<Item> {
+            fn into(self) -> ::alloc::vec::Vec<Item> {
                 self.0
             }
         }
 
-        impl<Item> PartialEq<Vec<Item>> for $ty<Item>
+        impl<Item> PartialEq<::alloc::vec::Vec<Item>> for $ty<Item>
         where
             Item: PartialEq,
         {
-            fn eq(&self, other: &Vec<Item>) -> bool {
+            fn eq(&self, other: &::alloc::vec::Vec<Item>) -> bool {
                 self.0.eq(other)
             }
         }
 
-        impl<Item> crate::serialization::Encode for $ty<Item>
+        impl<Item> $crate::serialization::Encode for $ty<Item>
         where
-            Item: crate::serialization::Encode + core::fmt::Debug,
+            Item: $crate::serialization::Encode + ::core::fmt::Debug,
         {
+            fn expected_size() -> crate::serialization::ExpectedSize
+            where
+                Self: Sized,
+            {
+                crate::serialization::ExpectedSize::Variable
+            }
+
             fn encoded_len(&self) -> usize {
-                self.iter().fold(core::mem::size_of::<$size_ty>(), |acc, item| {
+                self.iter().fold(::core::mem::size_of::<$size_ty>(), |acc, item| {
                     acc + item.encoded_len()
                 })
             }
 
-            fn encode_into<W: std::io::Write>(
+            fn encode_into<W: $crate::io::NoStdWrite>(
                 &self,
                 writer: &mut W,
-            ) -> core::result::Result<(), $crate::error::ProtoError> {
-                use crate::error::*;
-                use core::convert::TryFrom;
+            ) -> ::core::result::Result<(), $crate::error::ProtoError> {
+                use ::core::convert::TryFrom;
+                use $crate::error::*;
 
                 let count = <$size_ty>::try_from(self.len())
-                    .map_err(crate::error::ProtoError::from)
+                    .map_err($crate::error::ProtoError::from)
                     .chain($crate::error::ProtoErrorKind::Encoding(stringify!($ty)))
                     .or_desc("couldn't convert losslessly vec size into u8 (count)")?;
                 count.encode_into(writer)?;
@@ -96,17 +103,17 @@ macro_rules! impl_container {
             }
         }
 
-        impl<'dec, Item> crate::serialization::Decode<'dec> for $ty<Item>
+        impl<'dec, Item> $crate::serialization::Decode<'dec> for $ty<Item>
         where
-            Item: crate::serialization::Decode<'dec>,
+            Item: $crate::serialization::Decode<'dec>,
         {
-            fn decode_from(cursor: &mut std::io::Cursor<&'dec [u8]>) -> Result<Self, $crate::error::ProtoError> {
-                use crate::error::*;
+            fn decode_from(cursor: &mut $crate::io::Cursor<'dec>) -> Result<Self, $crate::error::ProtoError> {
+                use $crate::error::*;
 
                 let count = <$size_ty>::decode_from(cursor)
                     .chain($crate::error::ProtoErrorKind::Decoding(stringify!($ty)))
                     .or_desc("couldn't decode list count")?;
-                let mut vec = Vec::new();
+                let mut vec = ::alloc::vec::Vec::new();
                 for i in 0..count {
                     vec.push(
                         Item::decode_from(cursor)
@@ -122,7 +129,7 @@ macro_rules! impl_container {
         #[derive(PartialEq, Debug, Clone)]
         pub struct $ty<'a>(pub &'a [u8]);
 
-        impl<'a> core::ops::Deref for $ty<'a> {
+        impl<'a> ::core::ops::Deref for $ty<'a> {
             type Target = &'a [u8];
 
             fn deref(&self) -> &Self::Target {
@@ -130,9 +137,9 @@ macro_rules! impl_container {
             }
         }
 
-        impl<'a> core::iter::IntoIterator for &'a $ty<'a> {
+        impl<'a> ::core::iter::IntoIterator for &'a $ty<'a> {
             type Item = &'a u8;
-            type IntoIter = alloc::slice::Iter<'a, u8>;
+            type IntoIter = ::alloc::slice::Iter<'a, u8>;
 
             fn into_iter(self) -> Self::IntoIter {
                 self.0.iter()
@@ -157,14 +164,21 @@ macro_rules! impl_container {
             }
         }
 
-        impl crate::serialization::Encode for $ty<'_> {
-            fn encoded_len(&self) -> usize {
-                core::mem::size_of::<$size_ty>() + core::mem::size_of::<u8>() * self.len()
+        impl $crate::serialization::Encode for $ty<'_> {
+            fn expected_size() -> crate::serialization::ExpectedSize
+            where
+                Self: Sized,
+            {
+                crate::serialization::ExpectedSize::Variable
             }
 
-            fn encode_into<W: std::io::Write>(&self, writer: &mut W) -> Result<(), $crate::error::ProtoError> {
-                use crate::error::*;
-                use core::convert::TryFrom;
+            fn encoded_len(&self) -> usize {
+                ::core::mem::size_of::<$size_ty>() + ::core::mem::size_of::<u8>() * self.len()
+            }
+
+            fn encode_into<W: $crate::io::NoStdWrite>(&self, writer: &mut W) -> Result<(), $crate::error::ProtoError> {
+                use ::core::convert::TryFrom;
+                use $crate::error::*;
 
                 let count = <$size_ty>::try_from(self.len())
                     .map_err(ProtoError::from)
@@ -181,9 +195,9 @@ macro_rules! impl_container {
             }
         }
 
-        impl<'dec: 'a, 'a> crate::serialization::Decode<'dec> for $ty<'a> {
-            fn decode_from(cursor: &mut std::io::Cursor<&'dec [u8]>) -> Result<Self, $crate::error::ProtoError> {
-                use crate::error::*;
+        impl<'dec: 'a, 'a> $crate::serialization::Decode<'dec> for $ty<'a> {
+            fn decode_from(cursor: &mut $crate::io::Cursor<'dec>) -> Result<Self, $crate::error::ProtoError> {
+                use $crate::error::*;
 
                 let count = <$size_ty>::decode_from(cursor)
                     .chain($crate::error::ProtoErrorKind::Decoding(stringify!($ty)))

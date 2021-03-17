@@ -1,5 +1,6 @@
 use crate::container::Vec8;
 use crate::message::EdgeRect;
+use alloc::vec::Vec;
 use core::mem;
 
 __flags_struct! {
@@ -146,46 +147,48 @@ impl NowSurfaceMap {
 
 #[derive(Encode, Decode, Debug, Clone)]
 #[meta_enum = "SurfaceMessageType"]
-pub enum NowSurfaceMsg {
+pub enum NowSurfaceMsg<'a> {
     ListReq(NowSurfaceListReqMsg),
     ListRsp(NowSurfaceListRspMsg),
     MapReq(NowSurfaceMapReqMsg),
     MapRsp(NowSurfaceMapRspMsg),
     SelectReq(NowSurfaceSelectReqMsg),
     SelectRsp(NowSurfaceSelectRspMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
-impl From<NowSurfaceListReqMsg> for NowSurfaceMsg {
+impl From<NowSurfaceListReqMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceListReqMsg) -> Self {
         Self::ListReq(msg)
     }
 }
 
-impl From<NowSurfaceListRspMsg> for NowSurfaceMsg {
+impl From<NowSurfaceListRspMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceListRspMsg) -> Self {
         Self::ListRsp(msg)
     }
 }
 
-impl From<NowSurfaceMapReqMsg> for NowSurfaceMsg {
+impl From<NowSurfaceMapReqMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceMapReqMsg) -> Self {
         Self::MapReq(msg)
     }
 }
 
-impl From<NowSurfaceMapRspMsg> for NowSurfaceMsg {
+impl From<NowSurfaceMapRspMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceMapRspMsg) -> Self {
         Self::MapRsp(msg)
     }
 }
 
-impl From<NowSurfaceSelectReqMsg> for NowSurfaceMsg {
+impl From<NowSurfaceSelectReqMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceSelectReqMsg) -> Self {
         Self::SelectReq(msg)
     }
 }
 
-impl From<NowSurfaceSelectRspMsg> for NowSurfaceMsg {
+impl From<NowSurfaceSelectRspMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceSelectRspMsg) -> Self {
         Self::SelectRsp(msg)
     }

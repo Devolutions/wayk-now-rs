@@ -1,7 +1,8 @@
 use crate::error::*;
+use crate::io::{Cursor, NoStdWrite};
 use crate::message::{NowString128, NowString16, NowString256, NowString32, NowString64};
 use crate::serialization::{Decode, Encode};
-use std::io::{Cursor, Seek, SeekFrom, Write};
+use alloc::boxed::Box;
 
 // NOW_SYSTEM_INFO
 
@@ -87,12 +88,14 @@ impl OsInfoExtraAndroid {
 
 #[derive(Debug, Clone, Encode)]
 #[meta_enum]
-pub enum OsInfoExtra {
+pub enum OsInfoExtra<'a> {
     Windows(OsInfoExtraWindows),
     Mac(OsInfoExtraMac),
     Linux(OsInfoExtraLinux),
     IOS(OsInfoExtraIOS),
     Android(OsInfoExtraAndroid),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
@@ -101,12 +104,6 @@ pub enum SystemInfoType {
     Os,
     #[fallback]
     Other(u16),
-}
-
-impl SystemInfoType {
-    pub fn size() -> usize {
-        2
-    }
 }
 
 __flags_struct! {
@@ -147,7 +144,7 @@ pub enum OsArch {
 }
 
 #[derive(Debug, Clone)]
-pub struct NowSystemOsInfo {
+pub struct NowSystemOsInfo<'a> {
     subtype: SystemInfoType,
     pub flags: SystemOsInfoFlags,
 
@@ -163,10 +160,14 @@ pub struct NowSystemOsInfo {
     pub kernel_release: NowString32,
     pub kernel_version: NowString128,
 
-    pub extra: Option<OsInfoExtra>,
+    pub extra: Option<OsInfoExtra<'a>>,
 }
 
-impl Encode for NowSystemOsInfo {
+impl<'a> Encode for NowSystemOsInfo<'a> {
+    fn expected_size() -> crate::serialization::ExpectedSize {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         self.subtype.encoded_len()
             + self.flags.encoded_len()
@@ -188,7 +189,7 @@ impl Encode for NowSystemOsInfo {
             }
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         self.subtype
             .encode_into(writer)
             .or_desc("couldn't encode os info subtype")?;
@@ -237,10 +238,9 @@ impl Encode for NowSystemOsInfo {
     }
 }
 
-impl Decode<'_> for NowSystemOsInfo {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
-        cursor.seek(SeekFrom::Current(SystemInfoType::size() as i64))?;
-
+impl<'dec: 'a, 'a> Decode<'dec> for NowSystemOsInfo<'a> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
+        let _ = SystemInfoType::decode_from(cursor).or_desc("couldn't decode system info type")?;
         let flags = SystemOsInfoFlags::decode_from(cursor).or_desc("couldn't decode os info flags")?;
         let os_type = OsType::decode_from(cursor).or_desc("couldn't decode os type")?;
         let os_arch = OsArch::decode_from(cursor).or_desc("couldn't decode os arch")?;
@@ -300,7 +300,7 @@ impl Decode<'_> for NowSystemOsInfo {
     }
 }
 
-impl NowSystemOsInfo {
+impl<'a> NowSystemOsInfo<'a> {
     const SUBTYPE: SystemInfoType = SystemInfoType::Os;
 
     pub fn new(
@@ -345,7 +345,7 @@ impl NowSystemOsInfo {
         self.kernel_version = kernel_version;
     }
 
-    pub fn set_extra_infos(&mut self, extra: OsInfoExtra) {
+    pub fn set_extra_infos(&mut self, extra: OsInfoExtra<'a>) {
         self.flags.set_extra();
         self.extra = Some(extra);
     }
@@ -353,8 +353,10 @@ impl NowSystemOsInfo {
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "SystemInfoType"]
-pub enum NowSystemInfo {
-    Os(NowSystemOsInfo),
+pub enum NowSystemInfo<'a> {
+    Os(NowSystemOsInfo<'a>),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 // NOW_SYSTEM_MSG
@@ -392,17 +394,17 @@ impl NowSystemInfoReqMsg {
 }
 
 #[derive(Decode, Encode, Debug, Clone)]
-pub struct NowSystemInfoRspMsg {
+pub struct NowSystemInfoRspMsg<'a> {
     subtype: SystemMessageType,
     flags: u8,
 
-    pub info_data: NowSystemInfo,
+    pub info_data: NowSystemInfo<'a>,
 }
 
-impl NowSystemInfoRspMsg {
+impl<'a> NowSystemInfoRspMsg<'a> {
     pub const SUBTYPE: SystemMessageType = SystemMessageType::InfoRsp;
 
-    pub fn new(info_data: NowSystemInfo) -> Self {
+    pub fn new(info_data: NowSystemInfo<'a>) -> Self {
         Self {
             subtype: Self::SUBTYPE,
             flags: 0,
@@ -446,11 +448,12 @@ impl NowSystemShutdownMsg {
 
 #[derive(Debug, Clone, Decode, Encode)]
 #[meta_enum = "SystemMessageType"]
-pub enum NowSystemMsg {
+pub enum NowSystemMsg<'a> {
     InfoReq(NowSystemInfoReqMsg),
-    // size difference is large...
-    InfoRsp(Box<NowSystemInfoRspMsg>),
+    InfoRsp(Box<NowSystemInfoRspMsg<'a>>),
     Shutdown(NowSystemShutdownMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[cfg(test)]
