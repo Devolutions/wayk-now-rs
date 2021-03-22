@@ -140,9 +140,9 @@ impl<'dec: 'a, 'a> Decode<'dec> for NowInputEventUnicode {
         let code = if bytes_left == end_exclusive {
             cursor.get_ref()[start_inclusive..end_exclusive].to_vec()
         } else {
-            return ProtoError::new(ProtoErrorKind::Decoding(
+            return Err(ProtoError::new(ProtoErrorKind::Decoding(
                 "NowInputEventUnicode: bytes_left != end_exclusive",
-            ));
+            )));
         };
 
         Ok(NowInputEventUnicode {

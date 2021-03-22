@@ -205,13 +205,13 @@ macro_rules! impl_container {
                 let start_inclusive = cursor.position() as usize;
                 let slices_to_end = &cursor.get_ref()[start_inclusive..];
                 if slices_to_end.len() < count as usize {
-                    return ProtoError::new(ProtoErrorKind::Decoding(stringify!($ty))).or_else_desc(|| {
-                        format!(
+                    return Err(
+                        ProtoError::new(ProtoErrorKind::Decoding(stringify!($ty))).with_desc(format!(
                             "couldn't decode list: count ({}) greater than available bytes ({})",
                             count,
                             slices_to_end.len()
-                        )
-                    });
+                        )),
+                    );
                 }
                 let bytes = &slices_to_end[..count as usize];
                 Ok($ty(bytes))

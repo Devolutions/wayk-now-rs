@@ -1,40 +1,53 @@
-use super::{ConnectionSM, ConnectionSMResult};
 use crate::alloc::string::ToString;
-use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::error::ProtoErrorKind;
 use crate::message::{NowActivateMsg, NowCapabilitiesMsg, NowMessage};
-use crate::sm::{ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionState};
-use alloc::rc::Rc;
+use crate::sm::client_connection::{AvailableAuthTypes, Channels};
+use crate::sm::{ConnectionSM, ConnectionState, ProtoState, SMData, SMEvent, SMEvents};
 use alloc::vec::Vec;
-use core::cell::RefCell;
 use log::info;
 
 macro_rules! unexpected_call {
     ($sm_struct:ident, $self:ident, $method_name:literal) => {
-        ProtoError::new(ProtoErrorKind::ConnectionSequence($sm_struct::CONNECTION_STATE)).or_desc(format!(
-            concat!("unexpected call to `{}::", $method_name, "` in state {:?}"),
-            $sm_struct::NAME,
-            $self.state
-        ))
+        SMEvent::fatal(
+            ProtoErrorKind::ConnectionSequence($sm_struct::CONNECTION_STATE),
+            format!(
+                concat!("unexpected call to `{}::", $method_name, "` in state {:?}"),
+                $sm_struct::NAME,
+                $self.state
+            ),
+        )
     };
 }
 
 macro_rules! unexpected_msg {
     ($sm_struct:ident, $self:ident, $unexpected_msg:ident) => {
-        ProtoError::new(ProtoErrorKind::UnexpectedMessage($unexpected_msg.get_type())).or_desc(format!(
-            "`{}` received an unexpected message in state {:?}: {:?}",
-            $sm_struct::NAME,
-            $self.state,
-            $unexpected_msg
-        ))
+        SMEvent::warn(
+            ProtoErrorKind::UnexpectedMessage($unexpected_msg.get_type()),
+            format!(
+                "`{}` received an unexpected message in state {:?}: {:?}",
+                $sm_struct::NAME,
+                $self.state,
+                $unexpected_msg
+            ),
+        )
     };
 }
 
-#[derive(PartialEq, Debug)]
+macro_rules! state_transition {
+    ($self:ident, $events:ident, $state:expr) => {
+        $self.state = $state;
+        $events.push(SMEvent::transition($self.state));
+    };
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum BasicState {
     Initial,
     Ready,
     Terminated,
 }
+
+impl ProtoState for BasicState {}
 
 // handshake
 
@@ -54,12 +67,6 @@ impl HandshakeSM {
 }
 
 impl ConnectionSM for HandshakeSM {
-    fn set_shared_data(&mut self, _: ConnectionSMSharedDataRc) {}
-
-    fn get_shared_data(&self) -> Option<ConnectionSMSharedDataRc> {
-        None
-    }
-
     fn is_terminated(&self) -> bool {
         self.state == BasicState::Terminated
     }
@@ -68,45 +75,49 @@ impl ConnectionSM for HandshakeSM {
         self.state == BasicState::Ready
     }
 
-    fn update_without_message<'msg>(&mut self) -> ConnectionSMResult<'msg> {
+    fn update_without_message<'msg>(&mut self, _: &mut SMData, events: &mut SMEvents<'msg>) {
         use wayk_proto::message::NowHandshakeMsg;
 
-        match &self.state {
+        match self.state {
             BasicState::Initial => {
-                self.state = BasicState::Ready;
-                Ok(Some(NowHandshakeMsg::new_success().into()))
+                events.push(SMEvent::PacketToSend(NowHandshakeMsg::new_success().into()));
+                state_transition!(self, events, BasicState::Ready);
             }
-            _ => unexpected_call!(Self, self, "update_without_message"),
+            _ => events.push(unexpected_call!(Self, self, "update_without_message")),
         }
     }
 
-    fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
+    fn update_with_message<'msg: 'a, 'a>(
+        &mut self,
+        _: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        msg: &'a NowMessage<'msg>,
+    ) {
         use wayk_proto::message::status::HandshakeStatusCode;
 
-        match &self.state {
+        match self.state {
             BasicState::Ready => match msg {
                 NowMessage::Handshake(msg) => match msg.status.code() {
                     HandshakeStatusCode::Success => {
                         log::trace!("handshake succeeded");
-                        self.state = BasicState::Terminated;
-                        Ok(None)
+                        state_transition!(self, events, BasicState::Terminated);
                     }
-                    HandshakeStatusCode::Failure => {
-                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
-                            .or_desc("handshake failed")
-                    }
-                    HandshakeStatusCode::Incompatible => {
-                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
-                            .or_desc("version incompatible")
-                    }
-                    HandshakeStatusCode::Other(code) => {
-                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
-                            .or_desc(format!("handshake status code: {}", code))
-                    }
+                    HandshakeStatusCode::Failure => events.push(SMEvent::fatal(
+                        ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake),
+                        "handshake failed",
+                    )),
+                    HandshakeStatusCode::Incompatible => events.push(SMEvent::fatal(
+                        ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake),
+                        "version incompatible",
+                    )),
+                    HandshakeStatusCode::Other(code) => events.push(SMEvent::error(
+                        ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake),
+                        format!("handshake status code: {}", code),
+                    )),
                 },
-                unexpected => unexpected_msg!(Self, self, unexpected),
+                unexpected => events.push(unexpected_msg!(Self, self, unexpected)),
             },
-            _ => unexpected_call!(Self, self, "update_with_message"),
+            _ => events.push(unexpected_call!(Self, self, "update_with_message")),
         }
     }
 }
@@ -115,30 +126,20 @@ impl ConnectionSM for HandshakeSM {
 
 pub struct NegotiateSM {
     state: BasicState,
-    shared_data: Rc<RefCell<ConnectionSMSharedData>>,
 }
 
 impl NegotiateSM {
     const CONNECTION_STATE: ConnectionState = ConnectionState::Negotiate;
     const NAME: &'static str = "NegotiateSM";
 
-    pub fn new(shared_data: Rc<RefCell<ConnectionSMSharedData>>) -> Self {
+    pub fn new() -> Self {
         Self {
             state: BasicState::Initial,
-            shared_data,
         }
     }
 }
 
 impl ConnectionSM for NegotiateSM {
-    fn set_shared_data(&mut self, shared_data: Rc<RefCell<ConnectionSMSharedData>>) {
-        self.shared_data = shared_data;
-    }
-
-    fn get_shared_data(&self) -> Option<ConnectionSMSharedDataRc> {
-        Some(Rc::clone(&self.shared_data))
-    }
-
     fn is_terminated(&self) -> bool {
         self.state == BasicState::Terminated
     }
@@ -147,58 +148,63 @@ impl ConnectionSM for NegotiateSM {
         self.state == BasicState::Ready
     }
 
-    fn update_without_message<'msg>(&mut self) -> ConnectionSMResult<'msg> {
+    fn update_without_message<'msg>(&mut self, data: &mut SMData, events: &mut SMEvents<'msg>) {
         use wayk_proto::message::{NegotiateFlags, NowNegotiateMsg};
 
         match &self.state {
             BasicState::Initial => {
-                self.state = BasicState::Ready;
-                let shared_data = self.shared_data.borrow();
-                Ok(Some(
+                events.push(SMEvent::PacketToSend(
                     NowNegotiateMsg::new_with_auth_list(
                         NegotiateFlags::new_empty().set_srp_extended(),
-                        shared_data.available_auth_types.clone(),
+                        data.supported_auths.clone(),
                     )
                     .into(),
-                ))
+                ));
+                state_transition!(self, events, BasicState::Ready);
             }
-            _ => unexpected_call!(Self, self, "update_without_message"),
+            _ => events.push(unexpected_call!(Self, self, "update_without_message")),
         }
     }
 
-    fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
+    fn update_with_message<'msg: 'a, 'a>(
+        &mut self,
+        data: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        msg: &'a NowMessage<'msg>,
+    ) {
         match &self.state {
             BasicState::Ready => match msg {
                 NowMessage::Negotiate(msg) => {
                     info!("Available authentication methods on server: {:?}", msg.auth_list.0);
 
-                    let mut shared_data = self.shared_data.borrow_mut();
                     let common_auth_types = msg
                         .auth_list
                         .iter()
-                        .filter(|elem| shared_data.available_auth_types.contains(elem))
+                        .filter(|elem| data.supported_auths.contains(elem))
                         .copied()
                         .collect();
-                    shared_data.available_auth_types = common_auth_types;
 
-                    self.state = BasicState::Terminated;
-                    Ok(None)
+                    events.push(SMEvent::data(AvailableAuthTypes(common_auth_types)));
+
+                    state_transition!(self, events, BasicState::Terminated);
                 }
-                unexpected => unexpected_msg!(Self, self, unexpected),
+                unexpected => events.push(unexpected_msg!(Self, self, unexpected)),
             },
-            _ => unexpected_call!(Self, self, "update_with_message"),
+            _ => events.push(unexpected_call!(Self, self, "update_with_message")),
         }
     }
 }
 
 // associate
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum AssociateState {
     WaitInfo,
     WaitResponse,
     Terminated,
 }
+
+impl ProtoState for AssociateState {}
 
 pub struct AssociateSM {
     state: AssociateState,
@@ -216,12 +222,6 @@ impl AssociateSM {
 }
 
 impl ConnectionSM for AssociateSM {
-    fn set_shared_data(&mut self, _: ConnectionSMSharedDataRc) {}
-
-    fn get_shared_data(&self) -> Option<ConnectionSMSharedDataRc> {
-        None
-    }
-
     fn is_terminated(&self) -> bool {
         self.state == AssociateState::Terminated
     }
@@ -230,46 +230,49 @@ impl ConnectionSM for AssociateSM {
         !self.is_terminated()
     }
 
-    fn update_without_message<'msg>(&mut self) -> ConnectionSMResult<'msg> {
-        unexpected_call!(Self, self, "update_without_message")
+    fn update_without_message<'msg>(&mut self, _: &mut SMData, events: &mut SMEvents<'msg>) {
+        events.push(unexpected_call!(Self, self, "update_without_message"));
     }
 
-    fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
+    fn update_with_message<'msg: 'a, 'a>(
+        &mut self,
+        _: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        msg: &'a NowMessage<'msg>,
+    ) {
         use wayk_proto::message::status::AssociateStatusCode;
         use wayk_proto::message::NowAssociateMsg;
 
         match &self.state {
             AssociateState::WaitInfo => match msg {
                 NowMessage::Associate(NowAssociateMsg::Info(msg)) => {
-                    self.state = AssociateState::WaitResponse;
                     if msg.flags.active() {
                         log::trace!("associate process session is already active");
-                        Ok(None)
                     } else {
-                        Ok(Some(NowAssociateMsg::new_request().into()))
+                        events.push(SMEvent::PacketToSend(NowAssociateMsg::new_request().into()));
                     }
+                    state_transition!(self, events, AssociateState::WaitResponse);
                 }
-                unexpected => unexpected_msg!(Self, self, unexpected),
+                unexpected => events.push(unexpected_msg!(Self, self, unexpected)),
             },
             AssociateState::WaitResponse => match msg {
                 NowMessage::Associate(NowAssociateMsg::Response(msg)) => match msg.status.code() {
                     AssociateStatusCode::Success => {
-                        self.state = AssociateState::Terminated;
+                        state_transition!(self, events, AssociateState::Terminated);
                         log::trace!("associate process succeeded");
-                        Ok(None)
                     }
-                    AssociateStatusCode::Failure => {
-                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
-                            .or_desc(format!("Association failed {:?}", msg.status.status_type().to_string()))
-                    }
-                    AssociateStatusCode::Other(code) => {
-                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
-                            .or_desc(format!("Associate status code: {}", code))
-                    }
+                    AssociateStatusCode::Failure => events.push(SMEvent::fatal(
+                        ProtoErrorKind::ConnectionSequence(ConnectionState::Associate),
+                        format!("Association failed {:?}", msg.status.status_type().to_string()),
+                    )),
+                    AssociateStatusCode::Other(code) => events.push(SMEvent::error(
+                        ProtoErrorKind::ConnectionSequence(ConnectionState::Associate),
+                        format!("Associate status code: {}", code),
+                    )),
                 },
-                unexpected => unexpected_msg!(Self, self, unexpected),
+                unexpected => events.push(unexpected_msg!(Self, self, unexpected)),
             },
-            AssociateState::Terminated => unexpected_call!(Self, self, "update_with_message"),
+            AssociateState::Terminated => events.push(unexpected_call!(Self, self, "update_with_message")),
         }
     }
 }
@@ -277,45 +280,41 @@ impl ConnectionSM for AssociateSM {
 // capabilities
 
 pub struct CapabilitiesSM {
-    terminated: bool,
-    shared_data: ConnectionSMSharedDataRc,
+    state: BasicState,
 }
 
 impl CapabilitiesSM {
-    pub fn new(shared_data: ConnectionSMSharedDataRc) -> Self {
+    const CONNECTION_STATE: ConnectionState = ConnectionState::Capabilities;
+    const NAME: &'static str = "CapabilitiesSM";
+
+    pub fn new() -> Self {
         Self {
-            terminated: false,
-            shared_data,
+            state: BasicState::Ready,
         }
     }
 }
 
 impl ConnectionSM for CapabilitiesSM {
-    fn set_shared_data(&mut self, shared_data: ConnectionSMSharedDataRc) {
-        self.shared_data = shared_data;
-    }
-
-    fn get_shared_data(&self) -> Option<ConnectionSMSharedDataRc> {
-        Some(Rc::clone(&self.shared_data))
-    }
-
     fn is_terminated(&self) -> bool {
-        self.terminated
+        self.state == BasicState::Terminated
     }
 
     fn waiting_for_packet(&self) -> bool {
-        !self.terminated
+        self.state != BasicState::Terminated
     }
 
-    fn update_without_message<'msg>(&mut self) -> ConnectionSMResult<'msg> {
-        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Capabilities))
-            .or_desc("unexpected call to `CapabilitiesSM::update_without_message`")
+    fn update_without_message<'msg>(&mut self, _: &mut SMData, events: &mut SMEvents<'msg>) {
+        events.push(unexpected_call!(Self, self, "update_without_message"));
     }
 
-    fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
-        if self.terminated {
-            ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Capabilities))
-                .or_desc("unexpected call to `CapabilitiesSM::update_with_message` in terminated state")
+    fn update_with_message<'msg: 'a, 'a>(
+        &mut self,
+        data: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        msg: &'a NowMessage<'msg>,
+    ) {
+        if self.state == BasicState::Terminated {
+            events.push(unexpected_call!(Self, self, "update_with_message"));
         } else {
             match msg {
                 NowMessage::Capabilities(msg) => {
@@ -328,14 +327,12 @@ impl ConnectionSM for CapabilitiesSM {
                     );
                     log::trace!("Server capabilities details: {:#?}", msg.capabilities.0);
 
-                    self.terminated = true;
-                    Ok(Some(
-                        NowCapabilitiesMsg::new_with_capabilities(self.shared_data.borrow().capabilities.clone())
-                            .into(),
-                    ))
+                    events.push(SMEvent::PacketToSend(
+                        NowCapabilitiesMsg::new_with_capabilities(data.capabilities.clone()).into(),
+                    ));
+                    state_transition!(self, events, BasicState::Terminated);
                 }
-                unexpected => ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Capabilities))
-                    .or_desc(format!("received an unexpected message: {:?}", unexpected)),
+                unexpected => events.push(unexpected_msg!(Self, self, unexpected)),
             }
         }
     }
@@ -343,7 +340,7 @@ impl ConnectionSM for CapabilitiesSM {
 
 // channels
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum ChannelPairingState {
     SendListRequest,
     WaitListResponse,
@@ -352,32 +349,24 @@ enum ChannelPairingState {
     Terminated,
 }
 
+impl ProtoState for ChannelPairingState {}
+
 pub struct ChannelsSM {
     state: ChannelPairingState,
-    shared_data: ConnectionSMSharedDataRc,
 }
 
 impl ChannelsSM {
     const CONNECTION_STATE: ConnectionState = ConnectionState::Channels;
     const NAME: &'static str = "ChannelsSM";
 
-    pub fn new(shared_data: ConnectionSMSharedDataRc) -> Self {
+    pub fn new() -> Self {
         Self {
             state: ChannelPairingState::SendListRequest,
-            shared_data,
         }
     }
 }
 
 impl ConnectionSM for ChannelsSM {
-    fn set_shared_data(&mut self, shared_data: ConnectionSMSharedDataRc) {
-        self.shared_data = shared_data;
-    }
-
-    fn get_shared_data(&self) -> Option<ConnectionSMSharedDataRc> {
-        Some(Rc::clone(&self.shared_data))
-    }
-
     fn is_terminated(&self) -> bool {
         self.state == ChannelPairingState::Terminated
     }
@@ -386,40 +375,41 @@ impl ConnectionSM for ChannelsSM {
         self.state == ChannelPairingState::WaitListResponse || self.state == ChannelPairingState::WaitOpenResponse
     }
 
-    fn update_without_message<'msg>(&mut self) -> ConnectionSMResult<'msg> {
+    fn update_without_message<'msg>(&mut self, data: &mut SMData, events: &mut SMEvents<'msg>) {
         use crate::message::{ChannelMessageType, NowChannelMsg};
         match self.state {
             ChannelPairingState::SendListRequest => {
-                self.state = ChannelPairingState::WaitListResponse;
-                Ok(Some(
-                    NowChannelMsg::new(
-                        ChannelMessageType::ChannelListRequest,
-                        self.shared_data.borrow().channels.clone(),
-                    )
-                    .into(),
-                ))
+                events.push(SMEvent::PacketToSend(
+                    NowChannelMsg::new(ChannelMessageType::ChannelListRequest, data.channel_defs.clone()).into(),
+                ));
+                state_transition!(self, events, ChannelPairingState::WaitListResponse);
             }
-            ChannelPairingState::WaitListResponse => unexpected_call!(Self, self, "update_without_message"),
+            ChannelPairingState::WaitListResponse => {
+                events.push(unexpected_call!(Self, self, "update_without_message"))
+            }
             ChannelPairingState::SendOpenRequest => {
-                self.state = ChannelPairingState::WaitOpenResponse;
-                Ok(Some(
-                    NowChannelMsg::new(
-                        ChannelMessageType::ChannelOpenRequest,
-                        self.shared_data.borrow().channels.clone(),
-                    )
-                    .into(),
-                ))
+                events.push(SMEvent::PacketToSend(
+                    NowChannelMsg::new(ChannelMessageType::ChannelOpenRequest, data.channel_defs.clone()).into(),
+                ));
+                state_transition!(self, events, ChannelPairingState::WaitOpenResponse);
             }
-            ChannelPairingState::WaitOpenResponse => unexpected_call!(Self, self, "update_without_message"),
-            ChannelPairingState::Terminated => unexpected_call!(Self, self, "update_without_message"),
+            ChannelPairingState::WaitOpenResponse => {
+                events.push(unexpected_call!(Self, self, "update_without_message"))
+            }
+            ChannelPairingState::Terminated => events.push(unexpected_call!(Self, self, "update_without_message")),
         }
     }
 
-    fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
+    fn update_with_message<'msg: 'a, 'a>(
+        &mut self,
+        data: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        msg: &'a NowMessage<'msg>,
+    ) {
         use crate::message::ChannelName;
 
         match self.state {
-            ChannelPairingState::SendListRequest => unexpected_call!(Self, self, "update_with_message"),
+            ChannelPairingState::SendListRequest => events.push(unexpected_call!(Self, self, "update_with_message")),
             ChannelPairingState::WaitListResponse => match msg {
                 NowMessage::Channel(msg) => {
                     log::info!(
@@ -431,26 +421,27 @@ impl ConnectionSM for ChannelsSM {
                     );
 
                     let mut unavailable_channels = Vec::new();
-                    for def in self.shared_data.borrow().channels.iter() {
+                    for def in data.channel_defs.iter() {
                         if !msg.channel_list.iter().any(|d| d.name == def.name) {
                             unavailable_channels.push(def.name.clone())
                         }
                     }
 
                     if !unavailable_channels.is_empty() {
-                        log::warn!("Unavailable channel(s) on server ignored: {:?}", unavailable_channels);
-                        self.shared_data
-                            .borrow_mut()
-                            .channels
+                        events.push(SMEvent::warn(
+                            ProtoErrorKind::ConnectionSequence(Self::CONNECTION_STATE),
+                            format!("Unavailable channel(s) on server ignored: {:?}", unavailable_channels),
+                        ));
+                        data.channel_defs
                             .retain(|def| !unavailable_channels.contains(&def.name));
                     }
 
-                    self.state = ChannelPairingState::SendOpenRequest;
-                    Ok(None)
+                    events.push(SMEvent::data(Channels(data.channel_defs.clone())));
+                    state_transition!(self, events, ChannelPairingState::SendOpenRequest);
                 }
-                unexpected => unexpected_msg!(Self, self, unexpected),
+                unexpected => events.push(unexpected_msg!(Self, self, unexpected)),
             },
-            ChannelPairingState::SendOpenRequest => unexpected_call!(Self, self, "update_with_message"),
+            ChannelPairingState::SendOpenRequest => events.push(unexpected_call!(Self, self, "update_with_message")),
             ChannelPairingState::WaitOpenResponse => match msg {
                 NowMessage::Channel(msg) => {
                     log::info!(
@@ -460,13 +451,15 @@ impl ConnectionSM for ChannelsSM {
                             .map(|def| &def.name)
                             .collect::<Vec<&ChannelName>>()
                     );
-                    self.state = ChannelPairingState::Terminated;
-                    self.shared_data.borrow_mut().channels = msg.channel_list.0.clone();
-                    Ok(Some(NowActivateMsg::default().into()))
+
+                    data.channel_defs = msg.channel_list.0.clone();
+
+                    events.push(SMEvent::PacketToSend(NowActivateMsg::default().into()));
+                    state_transition!(self, events, ChannelPairingState::Terminated);
                 }
-                unexpected => unexpected_msg!(Self, self, unexpected),
+                unexpected => events.push(unexpected_msg!(Self, self, unexpected)),
             },
-            ChannelPairingState::Terminated => unexpected_call!(Self, self, "update_with_message"),
+            ChannelPairingState::Terminated => events.push(unexpected_call!(Self, self, "update_with_message")),
         }
     }
 }

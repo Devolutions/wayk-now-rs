@@ -1,3 +1,5 @@
+#![allow(clippy::identity_op)]
+
 macro_rules! major {
     () => {
         21

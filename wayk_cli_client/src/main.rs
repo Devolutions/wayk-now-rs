@@ -7,7 +7,6 @@ use config::Cli;
 use std::convert::TryFrom;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
-use std::rc::Rc;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use structopt::StructOpt;
@@ -15,15 +14,14 @@ use wayk_proto::channels_manager::ChannelsManager;
 use wayk_proto::header::AbstractNowHeader;
 use wayk_proto::message::{
     ClipboardFormatDef, NowChatTextMsg, NowClipboardControlRspMsg, NowClipboardFormatDataReqMsg,
-    NowClipboardFormatDataRspMsgOwned, NowClipboardFormatListReqMsg, NowMessage, NowString256, NowString65535,
+    NowClipboardFormatDataRspMsgOwned, NowClipboardFormatListReqMsg, NowString256, NowString65535,
 };
 use wayk_proto::packet::{NowPacket, NowPacketAccumulator};
 use wayk_proto::serialization::Encode;
-use wayk_proto::sharee::{Sharee, ShareeCallbackTrait, ShareeResult};
+use wayk_proto::sharee::Sharee;
 use wayk_proto::sm::{
-    ChatChannelCallbackTrait, ChatChannelSM, ChatData, ChatDataRc, ClientConnectionSeqSM,
-    ClipboardChannelCallbackTrait, ClipboardChannelSM, ClipboardData, ClipboardDataRc, DummyConnectionSeqCallback,
-    VirtChannelSMResult,
+    ChannelResponses, ChatChannelCallbackTrait, ChatChannelSM, ChatData, ClientConnectionSeqSM,
+    ClipboardChannelCallbackTrait, ClipboardChannelSM, ClipboardData, SMData, SMEvent,
 };
 
 fn main() {
@@ -47,7 +45,7 @@ fn main() {
                         match packet {
                             Ok(packet) => {
                                 log::debug!("Received {:?} packet.", packet.header.body_type());
-                                handle_update_result(&mut stream, sharee.update_with_body(&packet.body));
+                                handle_events(&mut stream, sharee.update_with_body(&packet.body));
                             }
                             Err(err) => log::error!("Invalid packet: {}", err),
                         }
@@ -63,7 +61,7 @@ fn main() {
                 }
 
                 while !sharee.waiting_for_packet() {
-                    handle_update_result(&mut stream, sharee.update_without_body());
+                    handle_events(&mut stream, sharee.update_without_body());
 
                     if sharee.is_terminated() {
                         break 'main;
@@ -105,14 +103,9 @@ fn configure_logger(args: &Cli) {
     .unwrap();
 }
 
-fn build_sharee(args: &Cli) -> Sharee<ClientConnectionSeqSM<DummyConnectionSeqCallback>, ShareeCallback> {
+fn build_sharee(args: &Cli) -> Sharee<ClientConnectionSeqSM> {
     // connection sequence
-    let connection_seq = ClientConnectionSeqSM::builder(DummyConnectionSeqCallback)
-        .available_auth_process(configure_available_auth_types())
-        .capabilities(configure_capabilities())
-        .channels_to_open(configure_channels_to_open())
-        .authenticate_sm(AuthenticateSM::new(args.auth.clone()))
-        .build();
+    let connection_seq = ClientConnectionSeqSM::new(AuthenticateSM::new(args.auth.clone()));
 
     // chat channel
     let friendly_name = args
@@ -126,25 +119,20 @@ fn build_sharee(args: &Cli) -> Sharee<ClientConnectionSeqSM<DummyConnectionSeqCa
         .map(|config| config.status_text.unwrap_or_else(|| "".into()))
         .unwrap_or_else(|| "".into());
 
-    let chat_data = ChatData::new()
-        .friendly_name(friendly_name)
-        .status_text(status_text)
-        .into_rc();
+    let chat_data = ChatData::new().friendly_name(friendly_name).status_text(status_text);
     let chat_channel_sm = ChatChannelSM::new(
-        Rc::clone(&chat_data),
+        chat_data,
         Box::new(get_current_timestamp),
         ChatCallback {
-            chat_data,
             on_sync_message: args.on_sync_message.clone(),
         },
     );
 
     // clipboard channel
-    let clipboard_data = ClipboardData::new().into_rc();
+    let clipboard_data = ClipboardData::new();
     let clipboard_channel_sm = ClipboardChannelSM::new(
-        Rc::clone(&clipboard_data),
+        clipboard_data,
         ClipboardCallback {
-            clipboard_data,
             on_ready_message: args.on_clipboard_ready.clone(),
         },
     );
@@ -155,7 +143,12 @@ fn build_sharee(args: &Cli) -> Sharee<ClientConnectionSeqSM<DummyConnectionSeqCa
         .with_sm(clipboard_channel_sm);
 
     // finally, build the sharee
-    Sharee::new(connection_seq, channels_manager, ShareeCallback)
+    Sharee::builder(connection_seq)
+        .supported_auths(configure_available_auth_types())
+        .capabilities(configure_capabilities())
+        .channels_to_open(configure_channels_to_open())
+        .channels_manager(channels_manager)
+        .build()
 }
 
 fn send_packet<W: Write>(writer: &mut W, packet: NowPacket<'_>) {
@@ -163,94 +156,88 @@ fn send_packet<W: Write>(writer: &mut W, packet: NowPacket<'_>) {
     log::debug!("Sent {:?} packet.", packet.header.body_type());
 }
 
-fn handle_update_result<W: Write>(writer: &mut W, update_result: ShareeResult<'_>) {
-    match update_result {
-        Ok(response) => {
-            if let Some(response) = response {
-                send_packet(writer, response)
-            }
+fn handle_events<W: Write>(writer: &mut W, events: Vec<SMEvent<'_>>) {
+    for ev in events {
+        match ev {
+            SMEvent::StateTransition(s) => log::info!("State transition: {:?}", s),
+            SMEvent::PacketToSend(rsp) => send_packet(writer, rsp),
+            SMEvent::Data(e) => log::info!("Proto data: {:?}", e),
+            SMEvent::Warn(e) => log::warn!("Sharee warning: {}", e),
+            SMEvent::Error(e) => log::error!("Sharee error: {}", e),
+            SMEvent::Fatal(e) => {
+                log::error!("Sharee FATAL error: {}", e);
+                panic!("Fatal error: {}", e);
+            },
         }
-        Err(err) => log::error!("Sharee update error: {}", err),
-    }
-}
-
-struct ShareeCallback;
-impl ShareeCallbackTrait for ShareeCallback {
-    fn on_unprocessed_message<'msg: 'a, 'a>(&mut self, message: &'a NowMessage<'msg>) -> ShareeResult<'msg> {
-        log::info!("Received {:?} message", message.get_type());
-        Ok(None)
     }
 }
 
 struct ClipboardCallback {
-    clipboard_data: ClipboardDataRc,
     on_ready_message: Option<String>,
 }
 
 impl ClipboardChannelCallbackTrait for ClipboardCallback {
-    fn on_control_rsp<'msg>(&mut self, _: &NowClipboardControlRspMsg) -> VirtChannelSMResult<'msg> {
-        Ok(Some(
-            NowClipboardFormatListReqMsg::new_with_formats(
-                self.clipboard_data.borrow_mut().next_sequence_id(),
-                vec![ClipboardFormatDef::new(
-                    0,
-                    NowString256::from_str("UTF8_STRING").unwrap(),
-                )],
-            )
-            .into(),
-        ))
+    fn on_control_rsp<'msg>(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        _: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        _: &NowClipboardControlRspMsg,
+    ) {
+        to_send.push(NowClipboardFormatListReqMsg::new_with_formats(
+            clipboard_data.next_sequence_id(),
+            vec![ClipboardFormatDef::new(
+                0,
+                NowString256::from_str("UTF8_STRING").unwrap(),
+            )],
+        ));
     }
 
-    fn on_format_data_req<'msg>(&mut self, _: &NowClipboardFormatDataReqMsg) -> VirtChannelSMResult<'msg> {
+    fn on_format_data_req<'msg>(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        _: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        _: &NowClipboardFormatDataReqMsg,
+    ) {
         if let Some(data) = &self.on_ready_message {
-            if self.clipboard_data.borrow().is_owner() {
-                Ok(Some(
-                    NowClipboardFormatDataRspMsgOwned::new_with_format_data(
-                        self.clipboard_data.borrow_mut().next_sequence_id(),
-                        0,
-                        data.as_bytes().to_vec(),
-                    )
-                    .into(),
+            if clipboard_data.is_owner() {
+                to_send.push(NowClipboardFormatDataRspMsgOwned::new_with_format_data(
+                    clipboard_data.next_sequence_id(),
+                    0,
+                    data.as_bytes().to_vec(),
                 ))
             } else {
                 log::warn!("couldn't take clipboard ownership");
-                Ok(None)
             }
-        } else {
-            Ok(None)
         }
     }
 }
 
 struct ChatCallback {
-    chat_data: ChatDataRc,
     on_sync_message: Option<String>,
 }
 
 impl ChatChannelCallbackTrait for ChatCallback {
-    fn on_message<'msg>(&mut self, text_msg: &NowChatTextMsg) -> VirtChannelSMResult<'msg> {
+    fn on_message(&mut self, chat_data: &mut ChatData, _: &mut ChannelResponses<'_>, text_msg: &NowChatTextMsg) {
         println!(
             "|Chat| Message from {}: {}",
-            self.chat_data.borrow().distant_friendly_name,
+            chat_data.distant_friendly_name,
             text_msg.text.as_str()
         );
-        Ok(None)
     }
 
-    fn on_synced<'msg>(&mut self) -> VirtChannelSMResult<'msg> {
-        let borrowed_config = self.chat_data.borrow();
+    fn on_synced<'msg>(&mut self, chat_data: &mut ChatData, to_send: &mut ChannelResponses<'_>) {
         println!(
             "|Chat| Synced with {}. Their status text is `{}`",
-            borrowed_config.distant_friendly_name, borrowed_config.distant_status_text
+            chat_data.distant_friendly_name, chat_data.distant_status_text
         );
-        drop(borrowed_config);
 
         if let Some(sync_msg) = self.on_sync_message.take() {
-            Ok(Some(
-                NowChatTextMsg::new(get_current_timestamp(), 0, NowString65535::try_from(sync_msg)?).into(),
-            ))
-        } else {
-            Ok(None)
+            match NowString65535::try_from(sync_msg) {
+                Ok(msg) => to_send.push(NowChatTextMsg::new(get_current_timestamp(), 0, msg)),
+                Err(e) => log::warn!("{}", e),
+            }
         }
     }
 }

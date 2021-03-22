@@ -16,12 +16,28 @@ pub struct ProtoError {
 sa::assert_impl_all!(ProtoError: Sync, Send);
 
 impl ProtoError {
-    pub fn new<T>(kind: ProtoErrorKind) -> core::result::Result<T, ProtoError> {
-        Err(Self::from(kind))
+    pub fn new(kind: ProtoErrorKind) -> Self {
+        Self::from(kind)
     }
 
     pub fn into_source(self) -> Option<Self> {
         self.source.map(|boxed| *boxed)
+    }
+
+    pub fn with_desc<S>(self, desc: S) -> ProtoError
+    where
+        S: Into<alloc::borrow::Cow<'static, str>>,
+    {
+        let new_desc = if let Some(current_desc) = self.description {
+            format!("{} [{}]", desc.into(), current_desc).into()
+        } else {
+            desc.into()
+        };
+
+        Self {
+            description: Some(new_desc),
+            ..self
+        }
     }
 
     #[cfg(feature = "std")]
@@ -98,7 +114,7 @@ impl<T> ProtoErrorResultExt<T> for core::result::Result<T, ProtoError> {
         S: Into<alloc::borrow::Cow<'static, str>>,
     {
         match self {
-            Err(_) => self.or_desc(f()),
+            Err(e) => Err(e.with_desc(f())),
             Ok(_) => self,
         }
     }
@@ -107,18 +123,7 @@ impl<T> ProtoErrorResultExt<T> for core::result::Result<T, ProtoError> {
     where
         S: Into<alloc::borrow::Cow<'static, str>>,
     {
-        self.map_err(|err| {
-            let new_desc = if let Some(current_desc) = err.description {
-                format!("{} [{}]", desc.into(), current_desc).into()
-            } else {
-                desc.into()
-            };
-
-            ProtoError {
-                description: Some(new_desc),
-                ..err
-            }
-        })
+        self.map_err(|e| e.with_desc(desc))
     }
 
     fn source(self, src: ProtoError) -> core::result::Result<T, ProtoError> {
