@@ -1,6 +1,6 @@
-use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::error::{ProtoError, ProtoErrorKind};
 use crate::message::{ChannelName, NowVirtualChannel};
-use crate::sm::VirtualChannelSM;
+use crate::sm::{ChannelResponses, SMData, SMEvent, SMEvents, VirtualChannelSM};
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 
@@ -41,27 +41,40 @@ impl ChannelsManager {
 
     pub fn update_with_virt_msg<'msg: 'a, 'a>(
         &mut self,
+        data: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        to_send: &mut ChannelResponses<'msg>,
         chan_msg: &'a NowVirtualChannel<'msg>,
-    ) -> ChannelsManagerResult<'msg> {
+    ) {
         if let Some(sm) = self.state_machines.get_mut(chan_msg.get_name()) {
-            sm.update_with_chan_msg(chan_msg)
-                .map(|o| o.map(|chan| (sm.get_channel_name(), chan)))
+            to_send.set_current_channel_name(sm.get_channel_name());
+            sm.update_with_chan_msg(data, events, to_send, chan_msg);
         } else {
-            ProtoError::new(ProtoErrorKind::ChannelsManager)
-                .or_desc(format!("state machine for channel {:?} not found", chan_msg.get_name()))
+            events.push(SMEvent::warn(
+                ProtoErrorKind::ChannelsManager,
+                format!("state machine for channel {:?} not found", chan_msg.get_name()),
+            ));
         }
     }
 
-    pub fn update_without_virt_msg<'msg>(&mut self) -> ChannelsManagerResult<'msg> {
+    pub fn update_without_virt_msg<'msg>(
+        &mut self,
+        data: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        to_send: &mut ChannelResponses<'msg>,
+    ) {
         for sm in self.state_machines.values_mut() {
             if !sm.waiting_for_packet() {
-                return sm
-                    .update_without_chan_msg()
-                    .map(|o| o.map(|chan| (sm.get_channel_name(), chan)));
+                to_send.set_current_channel_name(sm.get_channel_name());
+                sm.update_without_chan_msg(data, events, to_send);
+                return;
             }
         }
-        ProtoError::new(ProtoErrorKind::ChannelsManager)
-            .or_desc("no channel state machine is ready to update without message")
+
+        events.push(SMEvent::warn(
+            ProtoErrorKind::ChannelsManager,
+            "no channel state machine is ready to update without message",
+        ));
     }
 
     pub fn waiting_for_packet(&self) -> bool {

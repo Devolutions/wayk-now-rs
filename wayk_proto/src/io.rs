@@ -212,7 +212,7 @@ impl<'a> Cursor<'a> {
         let v = self
             .inner
             .get(self.pos)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         Ok(*v)
     }
 
@@ -221,7 +221,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 1)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         Ok(u16::from_le_bytes(range.try_into().unwrap()))
     }
 
@@ -230,7 +230,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 3)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         Ok(u32::from_le_bytes(range.try_into().unwrap()))
     }
 
@@ -239,7 +239,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 7)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         Ok(u64::from_le_bytes(range.try_into().unwrap()))
     }
 
@@ -247,14 +247,14 @@ impl<'a> Cursor<'a> {
     pub fn peek_rest(&self) -> Result<&'a [u8], NoStdIoError> {
         self.inner
             .get(self.pos..)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))
     }
 
     #[inline]
     pub fn peek_n(&mut self, n: usize) -> Result<&'a [u8], NoStdIoError> {
         self.inner
             .get(self.pos..self.pos + n)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))
     }
 
     #[inline]
@@ -277,7 +277,7 @@ impl<'a> Cursor<'a> {
         let bytes = self
             .inner
             .get(self.pos..self.pos + n)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += n;
         Ok(bytes)
     }
@@ -287,7 +287,7 @@ impl<'a> Cursor<'a> {
         let v = self
             .inner
             .get(self.pos)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 1;
         Ok(*v)
     }
@@ -297,7 +297,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 2)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 2;
         Ok(u16::from_le_bytes(range.try_into().unwrap()))
     }
@@ -307,7 +307,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 4)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 4;
         Ok(u32::from_le_bytes(range.try_into().unwrap()))
     }
@@ -317,7 +317,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 8)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 8;
         Ok(u64::from_le_bytes(range.try_into().unwrap()))
     }
@@ -327,7 +327,7 @@ impl<'a> Cursor<'a> {
         let v = self
             .inner
             .get(self.pos)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 1;
         Ok(*v as i8)
     }
@@ -337,7 +337,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 2)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 2;
         Ok(i16::from_le_bytes(range.try_into().unwrap()))
     }
@@ -347,7 +347,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 4)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 4;
         Ok(i32::from_le_bytes(range.try_into().unwrap()))
     }
@@ -357,7 +357,7 @@ impl<'a> Cursor<'a> {
         let range = self
             .inner
             .get(self.pos..self.pos + 8)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += 8;
         Ok(i64::from_le_bytes(range.try_into().unwrap()))
     }
@@ -367,7 +367,7 @@ impl<'a> Cursor<'a> {
         let rest = self
             .inner
             .get(self.pos..)
-            .ok_or(NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
+            .ok_or_else(|| NoStdIoError::new(NoStdIoErrorKind::UnexpectedEof))?;
         self.pos += rest.len();
         Ok(rest)
     }

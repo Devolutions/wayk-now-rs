@@ -1,55 +1,46 @@
-/** client connection sequence **/
 mod sub_sm;
 
-use crate::message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage};
-use crate::sm::{
-    ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionSeqCallbackTrait,
-    ConnectionState, DummyConnectionSM,
-};
+use crate::error::ProtoErrorKind;
+use crate::message::{AuthType, NowChannelDef, NowMessage};
+use crate::sm::{ConnectionSM, DummyConnectionSM, ProtoData, ProtoState, SMData, SMEvent, SMEvents};
 use alloc::boxed::Box;
-use alloc::rc::Rc;
 use alloc::vec::Vec;
-use core::cell::RefCell;
 
-pub struct ClientConnectionSeqSM<UserCallback> {
-    user_callback: UserCallback,
+#[derive(Debug, Clone)]
+pub struct AvailableAuthTypes(Vec<AuthType>);
+
+impl ProtoData for AvailableAuthTypes {}
+
+#[derive(Debug, Clone)]
+pub struct Channels(Vec<NowChannelDef>);
+
+impl ProtoData for Channels {}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ConnectionState {
+    Handshake,
+    Negotiate,
+    Authenticate,
+    Associate,
+    Capabilities,
+    Channels,
+    Final,
+}
+
+impl ProtoState for ConnectionState {}
+
+pub struct ClientConnectionSeqSM {
     state: ConnectionState,
     current_sm: Box<dyn ConnectionSM>,
     authenticate_sm: Box<dyn ConnectionSM>,
-    shared_data: ConnectionSMSharedDataRc,
 }
 
-impl<UserCallback> ClientConnectionSeqSM<UserCallback>
-where
-    UserCallback: ConnectionSeqCallbackTrait,
-{
-    pub fn builder(user_callback: UserCallback) -> ClientConnectionSeqBuilder<UserCallback> {
-        ClientConnectionSeqBuilder {
-            user_callback,
-            available_auth_types: Vec::new(),
-            authenticate_sm: Box::new(DummyConnectionSM),
-            capabilities: Vec::new(),
-            channels_to_open: Vec::new(),
-        }
-    }
-
-    pub fn new(
-        user_callback: UserCallback,
-        available_auth_types: Vec<AuthType>,
-        authenticate_sm: Box<dyn ConnectionSM>,
-        capabilities: Vec<NowCapset<'static>>,
-        channels_to_open: Vec<NowChannelDef>,
-    ) -> Self {
+impl ClientConnectionSeqSM {
+    pub fn new<P: ConnectionSM + 'static>(sm: P) -> Self {
         Self {
-            user_callback,
             state: ConnectionState::Handshake,
             current_sm: Box::new(sub_sm::HandshakeSM::new()),
-            authenticate_sm,
-            shared_data: Rc::new(RefCell::new(ConnectionSMSharedData {
-                available_auth_types,
-                capabilities,
-                channels: channels_to_open,
-            })),
+            authenticate_sm: Box::new(sm),
         }
     }
 
@@ -57,67 +48,60 @@ where
         self.state
     }
 
-    fn __check_result(&mut self, result: &ConnectionSMResult<'_>) {
-        if result.is_err() {
-            log::trace!("an error occurred. Set connection state machine to final state.");
+    fn __check_for_fatal(&mut self, events: &SMEvents<'_>) {
+        if events.peek().iter().any(|e| matches!(e, SMEvent::Fatal(_))) {
+            log::trace!("Fatal error occurred. Set connection state machine to final state.");
             self.state = ConnectionState::Final;
         }
     }
 
-    fn __go_to_next_state(&mut self) {
+    fn __go_to_next_state<'msg>(&mut self, events: &mut SMEvents<'msg>) {
         match self.state {
             ConnectionState::Handshake => {
+                self.current_sm = Box::new(sub_sm::NegotiateSM::new());
                 self.state = ConnectionState::Negotiate;
-                self.current_sm = Box::new(sub_sm::NegotiateSM::new(Rc::clone(&self.shared_data)));
-                self.user_callback.on_handshake_completed(&self.shared_data.borrow());
+                events.push(SMEvent::transition(self.state));
             }
             ConnectionState::Negotiate => {
-                self.state = ConnectionState::Authenticate;
-                self.authenticate_sm.set_shared_data(Rc::clone(&self.shared_data));
                 core::mem::swap(&mut self.current_sm, &mut self.authenticate_sm);
 
                 // set invalid authenticate_sm field to dummy connection state machine
                 let mut dummy_sm: Box<dyn ConnectionSM> = Box::new(DummyConnectionSM);
                 core::mem::swap(&mut self.authenticate_sm, &mut dummy_sm);
 
-                self.user_callback.on_negotiate_completed(&self.shared_data.borrow());
+                self.state = ConnectionState::Authenticate;
+                events.push(SMEvent::transition(self.state));
             }
             ConnectionState::Authenticate => {
-                self.state = ConnectionState::Associate;
                 self.current_sm = Box::new(sub_sm::AssociateSM::new());
-                self.user_callback.on_authenticate_completed(&self.shared_data.borrow());
+                self.state = ConnectionState::Associate;
+                events.push(SMEvent::transition(self.state));
             }
             ConnectionState::Associate => {
+                self.current_sm = Box::new(sub_sm::CapabilitiesSM::new());
                 self.state = ConnectionState::Capabilities;
-                self.current_sm = Box::new(sub_sm::CapabilitiesSM::new(Rc::clone(&self.shared_data)));
-                self.user_callback.on_associate_completed(&self.shared_data.borrow());
+                events.push(SMEvent::transition(self.state));
             }
             ConnectionState::Capabilities => {
+                self.current_sm = Box::new(sub_sm::ChannelsSM::new());
                 self.state = ConnectionState::Channels;
-                self.current_sm = Box::new(sub_sm::ChannelsSM::new(Rc::clone(&self.shared_data)));
-                self.user_callback.on_capabilities_completed(&self.shared_data.borrow());
+                events.push(SMEvent::transition(self.state));
             }
             ConnectionState::Channels => {
                 self.state = ConnectionState::Final;
-                self.user_callback.on_connection_completed(&self.shared_data.borrow());
+                events.push(SMEvent::transition(self.state));
             }
-            ConnectionState::Final => log::warn!("Attempted to go to the next state from the final state."),
+            ConnectionState::Final => {
+                events.push(SMEvent::warn(
+                    ProtoErrorKind::ConnectionSequence(ConnectionState::Final),
+                    "Attempted to go to the next state from the final state.",
+                ));
+            }
         }
     }
 }
 
-impl<UserCallback> ConnectionSM for ClientConnectionSeqSM<UserCallback>
-where
-    UserCallback: ConnectionSeqCallbackTrait,
-{
-    fn set_shared_data(&mut self, shared_data: ConnectionSMSharedDataRc) {
-        self.shared_data = shared_data
-    }
-
-    fn get_shared_data(&self) -> Option<ConnectionSMSharedDataRc> {
-        Some(Rc::clone(&self.shared_data))
-    }
-
+impl ConnectionSM for ClientConnectionSeqSM {
     fn is_terminated(&self) -> bool {
         self.state == ConnectionState::Final
     }
@@ -126,77 +110,26 @@ where
         self.current_sm.waiting_for_packet()
     }
 
-    fn update_without_message<'msg>(&mut self) -> ConnectionSMResult<'msg> {
-        let response = self.current_sm.update_without_message();
-
+    fn update_without_message<'msg>(&mut self, data: &mut SMData, events: &mut SMEvents<'msg>) {
+        self.current_sm.update_without_message(data, events);
         if self.current_sm.is_terminated() {
-            self.__go_to_next_state();
+            self.__go_to_next_state(events);
         } else {
-            self.__check_result(&response);
+            self.__check_for_fatal(events);
         }
-
-        response
     }
 
-    fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
-        let response = self.current_sm.update_with_message(msg);
-
+    fn update_with_message<'msg: 'a, 'a>(
+        &mut self,
+        data: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        msg: &'a NowMessage<'msg>,
+    ) {
+        self.current_sm.update_with_message(data, events, msg);
         if self.current_sm.is_terminated() {
-            self.__go_to_next_state();
+            self.__go_to_next_state(events);
         } else {
-            self.__check_result(&response);
+            self.__check_for_fatal(events);
         }
-
-        response
-    }
-}
-
-// builder
-
-pub struct ClientConnectionSeqBuilder<UserCallback> {
-    available_auth_types: Vec<AuthType>,
-    authenticate_sm: Box<dyn ConnectionSM>,
-    capabilities: Vec<NowCapset<'static>>,
-    channels_to_open: Vec<NowChannelDef>,
-    user_callback: UserCallback,
-}
-
-impl<UserCallback> ClientConnectionSeqBuilder<UserCallback>
-where
-    UserCallback: ConnectionSeqCallbackTrait,
-{
-    pub fn available_auth_process(self, available_auth_types: Vec<AuthType>) -> Self {
-        Self {
-            available_auth_types,
-            ..self
-        }
-    }
-
-    pub fn authenticate_sm<P: ConnectionSM + 'static>(self, sm: P) -> Self {
-        Self {
-            authenticate_sm: Box::new(sm),
-            ..self
-        }
-    }
-
-    pub fn capabilities(self, capabilities: Vec<NowCapset<'static>>) -> Self {
-        Self { capabilities, ..self }
-    }
-
-    pub fn channels_to_open(self, channels_to_open: Vec<ChannelName>) -> Self {
-        Self {
-            channels_to_open: channels_to_open.into_iter().map(NowChannelDef::new).collect(),
-            ..self
-        }
-    }
-
-    pub fn build(self) -> ClientConnectionSeqSM<UserCallback> {
-        ClientConnectionSeqSM::new(
-            self.user_callback,
-            self.available_auth_types,
-            self.authenticate_sm,
-            self.capabilities,
-            self.channels_to_open,
-        )
     }
 }

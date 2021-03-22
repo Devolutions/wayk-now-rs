@@ -1,85 +1,135 @@
-use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::error::ProtoErrorKind;
 use crate::message::{
     ChannelName, ClipboardControlState, ClipboardResponseFlags, NowClipboardCapabilitiesReqMsg,
     NowClipboardControlReqMsg, NowClipboardControlRspMsg, NowClipboardFormatDataReqMsg, NowClipboardFormatDataRspMsg,
     NowClipboardFormatListReqMsg, NowClipboardFormatListRspMsg, NowClipboardMsg, NowClipboardResumeReqMsg,
     NowClipboardResumeRspMsg, NowClipboardSuspendReqMsg, NowClipboardSuspendRspMsg, NowVirtualChannel,
 };
-use crate::sm::{VirtChannelSMResult, VirtualChannelSM};
-use alloc::rc::Rc;
-use core::cell::RefCell;
-
-pub type ClipboardDataRc = Rc<RefCell<ClipboardData>>;
+use crate::sm::{ChannelResponses, ProtoState, SMData, SMEvent, SMEvents, VirtualChannelSM};
 
 pub trait ClipboardChannelCallbackTrait {
-    fn on_control_rsp<'msg>(&mut self, msg: &NowClipboardControlRspMsg) -> VirtChannelSMResult<'msg> {
+    fn on_control_rsp(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardControlRspMsg,
+    ) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 
-    /// return true to accept resume request
-    fn on_resume_req(&mut self, msg: &NowClipboardResumeReqMsg) -> bool {
+    /// Returns true to accept resume request
+    fn accept_resume(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        msg: &NowClipboardResumeReqMsg,
+    ) -> bool {
         #![allow(unused_variables)]
         true
     }
 
-    fn on_resume_rsp<'msg>(&mut self, msg: &NowClipboardResumeRspMsg) -> VirtChannelSMResult<'msg> {
+    fn on_resume_rsp(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardResumeRspMsg,
+    ) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 
     /// return true to accept suspend request
-    fn on_suspend_req(&mut self, msg: &NowClipboardSuspendReqMsg) -> bool {
+    fn on_suspend_req(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardSuspendReqMsg,
+    ) -> bool {
         #![allow(unused_variables)]
         true
     }
 
-    fn on_suspend_rsp<'msg>(&mut self, msg: &NowClipboardSuspendRspMsg) -> VirtChannelSMResult<'msg> {
+    fn on_suspend_rsp(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardSuspendRspMsg,
+    ) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 
-    /// return true to transfer ownership to peer and false to refuse
-    fn on_format_list_req(&mut self, msg: &NowClipboardFormatListReqMsg) -> bool {
+    /// Returns true to transfer ownership to peer and false to refuse
+    fn transfer_ownership_to_peer(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        msg: &NowClipboardFormatListReqMsg,
+    ) -> bool {
         #![allow(unused_variables)]
         true
     }
 
-    fn on_format_list_rsp<'msg>(&mut self, msg: &NowClipboardFormatListRspMsg) -> VirtChannelSMResult<'msg> {
+    fn on_format_list_rsp(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardFormatListRspMsg,
+    ) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 
-    fn on_format_data_req<'msg>(&mut self, msg: &NowClipboardFormatDataReqMsg) -> VirtChannelSMResult<'msg> {
+    fn on_format_data_req(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardFormatDataReqMsg,
+    ) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 
-    fn on_format_data_rsp<'msg>(&mut self, msg: &NowClipboardFormatDataRspMsg) -> VirtChannelSMResult<'msg> {
+    fn on_format_data_rsp(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardFormatDataRspMsg,
+    ) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 
-    fn auto_fetch_data<'msg>(&mut self) -> VirtChannelSMResult<'msg> {
+    /// On clipboard format list req message received if auto fetch is enabled
+    fn on_auto_fetch(
+        &mut self,
+        clipboard_data: &mut ClipboardData,
+        sm_data: &mut SMData,
+        to_send: &mut ChannelResponses<'_>,
+        msg: &NowClipboardFormatListReqMsg,
+    ) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 }
 
 sa::assert_obj_safe!(ClipboardChannelCallbackTrait);
 
 pub struct DummyClipboardChannelCallback;
+
 impl ClipboardChannelCallbackTrait for DummyClipboardChannelCallback {}
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum ClipboardState {
     Initial,
     Capabilities,
     Disabled,
     Enabled,
-    AutoFetch,
     Terminated,
 }
+
+impl ProtoState for ClipboardState {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClipboardData {
@@ -123,15 +173,11 @@ impl ClipboardData {
         self.sequence_id += 1;
         self.sequence_id
     }
-
-    pub fn into_rc(self) -> ClipboardDataRc {
-        Rc::new(RefCell::new(self))
-    }
 }
 
 pub struct ClipboardChannelSM<UserCallback> {
     state: ClipboardState,
-    data: ClipboardDataRc,
+    data: ClipboardData,
     user_callback: UserCallback,
 }
 
@@ -139,7 +185,7 @@ impl<UserCallback> ClipboardChannelSM<UserCallback>
 where
     UserCallback: ClipboardChannelCallbackTrait,
 {
-    pub fn new(data: ClipboardDataRc, user_callback: UserCallback) -> Self {
+    pub fn new(data: ClipboardData, user_callback: UserCallback) -> Self {
         Self {
             state: ClipboardState::Initial,
             data,
@@ -147,33 +193,33 @@ where
         }
     }
 
-    fn __unexpected_with_call<'msg>(&self) -> VirtChannelSMResult<'msg> {
-        ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name())).or_desc(format!(
-            "unexpected call to `update_with_chan_msg` in state {:?}",
-            self.state
+    fn h_unexpected_with_call<'msg>(&self, events: &mut SMEvents<'msg>) {
+        events.push(SMEvent::error(
+            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+            format!("unexpected call to `update_with_chan_msg` in state {:?}", self.state),
         ))
     }
 
-    fn __unexpected_without_call<'msg>(&self) -> VirtChannelSMResult<'msg> {
-        ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name())).or_desc(format!(
-            "unexpected call to `update_without_chan_msg` in state {:?}",
-            self.state
+    fn h_unexpected_without_call<'msg>(&self, events: &mut SMEvents<'msg>) {
+        events.push(SMEvent::error(
+            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+            format!("unexpected call to `update_without_chan_msg` in state {:?}", self.state),
         ))
     }
 
-    fn __unexpected_message<'msg: 'a, 'a>(&self, unexpected: &'a NowVirtualChannel<'msg>) -> VirtChannelSMResult<'msg> {
-        ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name())).or_desc(format!(
-            "received an unexpected message in state {:?}: {:?}",
-            self.state, unexpected
+    fn h_unexpected_message<'msg: 'a, 'a>(&self, events: &mut SMEvents<'msg>, unexpected: &'a NowVirtualChannel<'msg>) {
+        events.push(SMEvent::warn(
+            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+            format!(
+                "received an unexpected message in state {:?}: {:?}",
+                self.state, unexpected
+            ),
         ))
     }
 
-    fn __check_failure<'msg>(&mut self, flags: ClipboardResponseFlags) -> VirtChannelSMResult<'msg> {
-        if flags.failure() {
-            ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name()))
-        } else {
-            Ok(None)
-        }
+    fn h_transition_state(&mut self, events: &mut SMEvents<'_>, state: ClipboardState) {
+        self.state = state;
+        events.push(SMEvent::transition(state));
     }
 }
 
@@ -195,133 +241,172 @@ where
             ClipboardState::Capabilities => true,
             ClipboardState::Disabled => true,
             ClipboardState::Enabled => true,
-            ClipboardState::AutoFetch => false,
             ClipboardState::Terminated => false,
         }
     }
 
-    fn update_without_chan_msg<'msg>(&mut self) -> VirtChannelSMResult<'msg> {
+    fn update_without_chan_msg<'msg>(
+        &mut self,
+        _: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        to_send: &mut ChannelResponses<'msg>,
+    ) {
         match self.state {
             ClipboardState::Initial => {
-                log::trace!("start");
-                self.state = ClipboardState::Capabilities;
-                Ok(Some(NowClipboardCapabilitiesReqMsg::default().into()))
+                self.h_transition_state(events, ClipboardState::Capabilities);
+                to_send.push(NowClipboardCapabilitiesReqMsg::default());
             }
-            ClipboardState::AutoFetch => {
-                self.state = ClipboardState::Enabled;
-                self.user_callback.auto_fetch_data()
+            _ => {
+                self.h_unexpected_without_call(events);
             }
-            _ => self.__unexpected_without_call(),
         }
     }
 
     fn update_with_chan_msg<'msg: 'a, 'a>(
         &mut self,
-        chan_msg: &'a NowVirtualChannel<'msg>,
-    ) -> VirtChannelSMResult<'msg> {
-        match chan_msg {
-            NowVirtualChannel::Clipboard(msg) => match self.state {
-                ClipboardState::Capabilities => match msg {
-                    NowClipboardMsg::CapabilitiesRsp(msg) => {
-                        self.__check_failure(msg.flags)
-                            .or_desc("capabilities exchange failed")?;
-                        self.state = ClipboardState::Disabled;
-                        log::trace!("capabilities exchange succeeded");
-                        Ok(Some(NowClipboardControlReqMsg::new(ClipboardControlState::Auto).into()))
+        data: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        to_send: &mut ChannelResponses<'msg>,
+        msg: &'a NowVirtualChannel<'msg>,
+    ) {
+        let m = if let NowVirtualChannel::Clipboard(m) = msg {
+            m
+        } else {
+            self.h_unexpected_message(events, msg);
+            return;
+        };
+
+        match self.state {
+            ClipboardState::Capabilities => match m {
+                NowClipboardMsg::CapabilitiesRsp(m) => {
+                    if m.flags.failure() {
+                        events.push(SMEvent::error(
+                            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+                            "capabilities exchange failed (failure flag received)",
+                        ));
+                        return;
                     }
-                    _ => self.__unexpected_message(chan_msg),
-                },
-                ClipboardState::Disabled => match msg {
-                    NowClipboardMsg::ControlRsp(msg) => {
-                        self.__check_failure(msg.flags).or_desc("control setting failed")?;
-                        self.state = ClipboardState::Enabled;
-                        log::trace!("enabled (control: {:?})", msg.control_state);
-                        self.user_callback.on_control_rsp(msg)
-                    }
-                    NowClipboardMsg::ResumeReq(msg) => {
-                        log::trace!("peer asked for resuming");
-                        if self.user_callback.on_resume_req(msg) {
-                            log::trace!("resume request accepted");
-                            self.state = ClipboardState::Enabled;
-                            Ok(Some(NowClipboardResumeRspMsg::default().into()))
-                        } else {
-                            log::trace!("resume request refused");
-                            Ok(Some(
-                                NowClipboardResumeRspMsg::new_with_flags(
-                                    ClipboardResponseFlags::new_empty().set_failure(),
-                                )
-                                .into(),
-                            ))
-                        }
-                    }
-                    NowClipboardMsg::ResumeRsp(msg) => {
-                        self.__check_failure(msg.flags).or_desc("resume failed")?;
-                        self.state = ClipboardState::Enabled;
-                        log::trace!("resumed");
-                        self.user_callback.on_resume_rsp(msg)
-                    }
-                    _ => self.__unexpected_message(chan_msg),
-                },
-                ClipboardState::Enabled => match msg {
-                    NowClipboardMsg::SuspendRsp(msg) => {
-                        self.__check_failure(msg.flags).or_desc("suspend failed")?;
-                        self.state = ClipboardState::Disabled;
-                        log::trace!("disabled");
-                        Ok(None)
-                    }
-                    NowClipboardMsg::FormatListReq(msg) => {
-                        log::trace!("peer asked for ownership");
-                        if self.user_callback.on_format_list_req(msg) {
-                            let mut data_mut = self.data.borrow_mut();
-                            data_mut.is_owner = false;
-                            log::trace!("ownership transferred to peer");
-                            if data_mut.auto_fetch {
-                                self.state = ClipboardState::AutoFetch;
-                            }
-                            Ok(Some(
-                                NowClipboardFormatListRspMsg::new(data_mut.next_sequence_id()).into(),
-                            ))
-                        } else {
-                            log::trace!("ownership transfer refused");
-                            Ok(Some(
-                                NowClipboardFormatListRspMsg::new_with_flags(
-                                    self.data.borrow_mut().next_sequence_id(),
-                                    ClipboardResponseFlags::new_empty().set_failure(),
-                                )
-                                .into(),
-                            ))
-                        }
-                    }
-                    NowClipboardMsg::FormatListRsp(msg) => {
-                        self.__check_failure(msg.flags)
-                            .or_desc("couldn't take ownership (refused by peer)")?;
-                        self.data.borrow_mut().is_owner = true;
-                        log::trace!("took ownership");
-                        self.user_callback.on_format_list_rsp(msg)
-                    }
-                    NowClipboardMsg::FormatDataReq(msg) => {
-                        let data = self.data.borrow();
-                        if data.is_owner || data.auto_fetch {
-                            self.user_callback.on_format_data_req(msg)
-                        } else {
-                            ProtoError::new(ProtoErrorKind::VirtualChannel(ChannelName::Clipboard)).or_desc(
-                                "received format data request while not owner and auto fetch mode is not activated",
-                            )
-                        }
-                    }
-                    NowClipboardMsg::FormatDataRsp(msg) => {
-                        if self.data.borrow().is_owner {
-                            ProtoError::new(ProtoErrorKind::VirtualChannel(ChannelName::Clipboard))
-                                .or_desc("received format data response while owner")
-                        } else {
-                            self.user_callback.on_format_data_rsp(msg)
-                        }
-                    }
-                    _ => self.__unexpected_message(chan_msg),
-                },
-                _ => self.__unexpected_with_call(),
+
+                    self.h_transition_state(events, ClipboardState::Disabled);
+                    to_send.push(NowClipboardControlReqMsg::new(ClipboardControlState::Auto));
+                }
+                _ => {
+                    self.h_unexpected_message(events, msg);
+                }
             },
-            _ => self.__unexpected_message(chan_msg),
+            ClipboardState::Disabled => match m {
+                NowClipboardMsg::ControlRsp(m) => {
+                    if m.flags.failure() {
+                        events.push(SMEvent::error(
+                            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+                            "control setting failed (failure flag received)",
+                        ));
+                        return;
+                    }
+
+                    self.h_transition_state(events, ClipboardState::Enabled);
+                    log::trace!("enabled (control: {:?})", m.control_state);
+                    self.user_callback.on_control_rsp(&mut self.data, data, to_send, m);
+                }
+                NowClipboardMsg::ResumeReq(m) => {
+                    log::trace!("peer asked for resuming");
+                    if self.user_callback.accept_resume(&mut self.data, data, m) {
+                        log::trace!("resume request accepted");
+                        self.h_transition_state(events, ClipboardState::Enabled);
+                        to_send.push(NowClipboardResumeRspMsg::default());
+                    } else {
+                        log::trace!("resume request refused");
+                        to_send.push(NowClipboardResumeRspMsg::new_with_flags(
+                            ClipboardResponseFlags::new_empty().set_failure(),
+                        ));
+                    }
+                }
+                NowClipboardMsg::ResumeRsp(m) => {
+                    if m.flags.failure() {
+                        events.push(SMEvent::error(
+                            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+                            "resume failed (failure flag received)",
+                        ));
+                        return;
+                    }
+
+                    self.h_transition_state(events, ClipboardState::Enabled);
+                    log::trace!("resumed");
+                    self.user_callback.on_resume_rsp(&mut self.data, data, to_send, m);
+                }
+                _ => {
+                    self.h_unexpected_message(events, msg);
+                }
+            },
+            ClipboardState::Enabled => match m {
+                NowClipboardMsg::SuspendRsp(m) => {
+                    if m.flags.failure() {
+                        events.push(SMEvent::error(
+                            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+                            "suspend failed (failure flag received)",
+                        ));
+                        return;
+                    }
+
+                    self.h_transition_state(events, ClipboardState::Disabled);
+                    log::trace!("disabled");
+                    self.user_callback.on_suspend_rsp(&mut self.data, data, to_send, m);
+                }
+                NowClipboardMsg::FormatListReq(m) => {
+                    log::trace!("peer asked for ownership");
+                    if self.user_callback.transfer_ownership_to_peer(&mut self.data, data, m) {
+                        self.data.is_owner = false;
+                        log::trace!("ownership transferred to peer");
+                        to_send.push(NowClipboardFormatListRspMsg::new(self.data.next_sequence_id()));
+                        self.user_callback.on_auto_fetch(&mut self.data, data, to_send, m);
+                    } else {
+                        log::trace!("ownership transfer refused");
+                        to_send.push(NowClipboardFormatListRspMsg::new_with_flags(
+                            self.data.next_sequence_id(),
+                            ClipboardResponseFlags::new_empty().set_failure(),
+                        ));
+                    }
+                }
+                NowClipboardMsg::FormatListRsp(m) => {
+                    if m.flags.failure() {
+                        events.push(SMEvent::error(
+                            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+                            "couldn't take ownership (refused by peer) (failure flag received)",
+                        ));
+                        return;
+                    }
+
+                    self.data.is_owner = true;
+                    log::trace!("took ownership");
+                    self.user_callback.on_format_list_rsp(&mut self.data, data, to_send, m);
+                }
+                NowClipboardMsg::FormatDataReq(m) => {
+                    if self.data.is_owner || self.data.auto_fetch {
+                        self.user_callback.on_format_data_req(&mut self.data, data, to_send, m);
+                    } else {
+                        events.push(SMEvent::warn(
+                            ProtoErrorKind::VirtualChannel(ChannelName::Clipboard),
+                            "received format data request while not owner and auto fetch mode is not activated",
+                        ))
+                    }
+                }
+                NowClipboardMsg::FormatDataRsp(m) => {
+                    if self.data.is_owner {
+                        events.push(SMEvent::warn(
+                            ProtoErrorKind::VirtualChannel(ChannelName::Clipboard),
+                            "received format data response while owner",
+                        ));
+                    } else {
+                        self.user_callback.on_format_data_rsp(&mut self.data, data, to_send, m);
+                    }
+                }
+                _ => {
+                    self.h_unexpected_message(events, msg);
+                }
+            },
+            _ => {
+                self.h_unexpected_with_call(events);
+            }
         }
     }
 }

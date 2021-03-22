@@ -16,6 +16,7 @@ pub mod auth;
 pub mod channels_manager;
 pub mod container;
 pub mod error;
+pub mod event;
 pub mod header;
 pub mod io;
 pub mod message;

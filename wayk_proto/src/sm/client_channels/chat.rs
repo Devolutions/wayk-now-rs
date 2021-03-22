@@ -1,32 +1,29 @@
 use crate::alloc::borrow::ToOwned;
-use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::error::ProtoErrorKind;
 use crate::message::{
     ChannelName, ChatCapabilitiesFlags, NowChatMsg, NowChatSyncMsg, NowChatTextMsg, NowString65535, NowVirtualChannel,
 };
-use crate::sm::{VirtChannelSMResult, VirtualChannelSM};
+use crate::sm::{ChannelResponses, ProtoState, SMData, SMEvent, SMEvents, VirtualChannelSM};
 use alloc::boxed::Box;
-use alloc::rc::Rc;
 use alloc::string::String;
-use core::cell::RefCell;
 use core::str::FromStr;
 
-pub type ChatDataRc = Rc<RefCell<ChatData>>;
 pub type TimestampFn = Box<dyn FnMut() -> u32>;
 
 pub trait ChatChannelCallbackTrait {
-    fn on_message<'msg>(&mut self, text_msg: &NowChatTextMsg) -> VirtChannelSMResult<'msg> {
+    fn on_message(&mut self, chat_data: &mut ChatData, to_send: &mut ChannelResponses<'_>, text_msg: &NowChatTextMsg) {
         #![allow(unused_variables)]
-        Ok(None)
     }
 
-    fn on_synced<'msg>(&mut self) -> VirtChannelSMResult<'msg> {
-        Ok(None)
+    fn on_synced(&mut self, chat_data: &mut ChatData, to_send: &mut ChannelResponses<'_>) {
+        #![allow(unused_variables)]
     }
 }
 
 sa::assert_obj_safe!(ChatChannelCallbackTrait);
 
 pub struct DummyChatChannelCallback;
+
 impl ChatChannelCallbackTrait for DummyChatChannelCallback {}
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,13 +71,9 @@ impl ChatData {
             ..self
         }
     }
-
-    pub fn into_rc(self) -> ChatDataRc {
-        Rc::new(RefCell::new(self))
-    }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum ChatState {
     Initial,
     Sync,
@@ -88,9 +81,11 @@ enum ChatState {
     Terminated,
 }
 
+impl ProtoState for ChatState {}
+
 pub struct ChatChannelSM<UserCallback> {
     state: ChatState,
-    data: ChatDataRc,
+    data: ChatData,
     timestamp_fn: TimestampFn,
     user_callback: UserCallback,
 }
@@ -99,34 +94,42 @@ impl<UserCallback> ChatChannelSM<UserCallback>
 where
     UserCallback: ChatChannelCallbackTrait,
 {
-    pub fn new(config: ChatDataRc, timestamp_fn: TimestampFn, user_callback: UserCallback) -> Self {
+    pub fn new(config: ChatData, timestamp_fn: TimestampFn, user_callback: UserCallback) -> Self {
         Self {
             state: ChatState::Initial,
-            data: Rc::clone(&config),
+            data: config,
             timestamp_fn,
             user_callback,
         }
     }
 
-    fn __unexpected_with_call<'msg>(&self) -> VirtChannelSMResult<'msg> {
-        ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name())).or_desc(format!(
-            "unexpected call to `update_with_chan_msg` in state {:?}",
-            self.state
+    fn h_unexpected_with_call<'msg>(&self, events: &mut SMEvents<'msg>) {
+        events.push(SMEvent::error(
+            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+            format!("unexpected call to `update_with_chan_msg` in state {:?}", self.state),
         ))
     }
 
-    fn __unexpected_without_call<'msg>(&self) -> VirtChannelSMResult<'msg> {
-        ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name())).or_desc(format!(
-            "unexpected call to `update_without_chan_msg` in state {:?}",
-            self.state
+    fn h_unexpected_without_call<'msg>(&self, events: &mut SMEvents<'msg>) {
+        events.push(SMEvent::error(
+            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+            format!("unexpected call to `update_without_chan_msg` in state {:?}", self.state),
         ))
     }
 
-    fn __unexpected_message<'msg: 'a, 'a>(&self, unexpected: &'a NowVirtualChannel<'msg>) -> VirtChannelSMResult<'msg> {
-        ProtoError::new(ProtoErrorKind::VirtualChannel(self.get_channel_name())).or_desc(format!(
-            "received an unexpected message in state {:?}: {:?}",
-            self.state, unexpected
+    fn h_unexpected_message<'msg: 'a, 'a>(&self, events: &mut SMEvents<'msg>, unexpected: &'a NowVirtualChannel<'msg>) {
+        events.push(SMEvent::error(
+            ProtoErrorKind::VirtualChannel(self.get_channel_name()),
+            format!(
+                "received an unexpected message in state {:?}: {:?}",
+                self.state, unexpected,
+            ),
         ))
+    }
+
+    fn h_transition_state(&mut self, events: &mut SMEvents<'_>, state: ChatState) {
+        self.state = state;
+        events.push(SMEvent::transition(state));
     }
 }
 
@@ -146,53 +149,72 @@ where
         self.state == ChatState::Active || self.state == ChatState::Sync
     }
 
-    fn update_without_chan_msg<'msg>(&mut self) -> VirtChannelSMResult<'msg> {
+    fn update_without_chan_msg<'msg>(
+        &mut self,
+        _: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        to_send: &mut ChannelResponses<'msg>,
+    ) {
         match self.state {
             ChatState::Initial => {
                 log::trace!("start syncing");
-                self.state = ChatState::Sync;
-                Ok(Some(
-                    NowChatSyncMsg::new(
-                        (self.timestamp_fn)(),
-                        self.data.borrow().capabilities,
-                        NowString65535::from_str(&self.data.borrow().friendly_name)?,
-                    )
-                    .status_text(NowString65535::from_str(&self.data.borrow().status_text)?)
-                    .into(),
-                ))
+
+                let friendly_name = match NowString65535::from_str(&self.data.friendly_name) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        events.push(SMEvent::Error(e));
+                        return;
+                    }
+                };
+
+                let status_text = match NowString65535::from_str(&self.data.status_text) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        events.push(SMEvent::Error(e));
+                        return;
+                    }
+                };
+
+                to_send.push(
+                    NowChatSyncMsg::new((self.timestamp_fn)(), self.data.capabilities, friendly_name)
+                        .status_text(status_text),
+                );
+
+                self.h_transition_state(events, ChatState::Sync);
             }
-            _ => self.__unexpected_without_call(),
+            _ => self.h_unexpected_without_call(events),
         }
     }
 
     fn update_with_chan_msg<'msg: 'a, 'a>(
         &mut self,
+        _: &mut SMData,
+        events: &mut SMEvents<'msg>,
+        to_send: &mut ChannelResponses<'msg>,
         chan_msg: &'a NowVirtualChannel<'msg>,
-    ) -> VirtChannelSMResult<'msg> {
+    ) {
         match chan_msg {
             NowVirtualChannel::Chat(msg) => match self.state {
                 ChatState::Sync => match msg {
                     NowChatMsg::Sync(msg) => {
                         // update config
-                        let mut config_mut = self.data.borrow_mut();
-                        config_mut.capabilities.value &= msg.capabilities.value;
-                        config_mut.distant_friendly_name = msg.friendly_name.as_str().to_owned();
-                        config_mut.distant_status_text = msg.status_text.as_str().to_owned();
-                        drop(config_mut);
+                        self.data.capabilities.value &= msg.capabilities.value;
+                        self.data.distant_friendly_name = msg.friendly_name.as_str().to_owned();
+                        self.data.distant_status_text = msg.status_text.as_str().to_owned();
 
                         log::trace!("channel synced");
                         self.state = ChatState::Active;
-                        self.user_callback.on_synced()
+                        self.user_callback.on_synced(&mut self.data, to_send);
                     }
-                    _ => self.__unexpected_message(chan_msg),
+                    _ => self.h_unexpected_message(events, chan_msg),
                 },
                 ChatState::Active => match msg {
-                    NowChatMsg::Text(msg) => self.user_callback.on_message(msg),
-                    _ => self.__unexpected_message(chan_msg),
+                    NowChatMsg::Text(msg) => self.user_callback.on_message(&mut self.data, to_send, msg),
+                    _ => self.h_unexpected_message(events, chan_msg),
                 },
-                _ => self.__unexpected_with_call(),
+                _ => self.h_unexpected_with_call(events),
             },
-            _ => self.__unexpected_message(chan_msg),
+            _ => self.h_unexpected_message(events, chan_msg),
         }
     }
 }

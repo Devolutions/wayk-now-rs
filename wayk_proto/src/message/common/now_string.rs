@@ -48,13 +48,13 @@ where
         let expected_size = SizeType::decode_from(cursor)?.into();
 
         if expected_size > Size::SIZE {
-            return ProtoError::new(ProtoErrorKind::Decoding("NowString")).or_else_desc(|| {
-                format!(
+            return Err(
+                ProtoError::new(ProtoErrorKind::Decoding("NowString")).with_desc(format!(
                     "attempted to parse a string greater (len: {}) than the NowString{} size limit",
                     expected_size,
                     Size::SIZE
-                )
-            });
+                )),
+            );
         }
 
         let string = {
@@ -159,13 +159,13 @@ where
     /// Encode an utf8 str into a now string
     pub fn helper_write_into<W: NoStdWrite>(writer: &mut W, s: &str) -> Result<()> {
         if s.len() > Size::SIZE {
-            return ProtoError::new(ProtoErrorKind::Encoding("NowString")).or_else_desc(|| {
-                format!(
+            return Err(
+                ProtoError::new(ProtoErrorKind::Encoding("NowString")).with_desc(format!(
                     "provided string greater (len: {}) than NowString{} size limit",
                     s.len(),
                     Size::SIZE
-                )
-            });
+                )),
+            );
         }
 
         let len = SizeType::try_from(s.len()).unwrap(); // should never panic by construction
@@ -196,13 +196,13 @@ where
 
     fn try_from(string: String) -> Result<Self> {
         if string.len() > Size::SIZE {
-            return ProtoError::new(ProtoErrorKind::Decoding("NowString")).or_else_desc(|| {
-                format!(
+            return Err(
+                ProtoError::new(ProtoErrorKind::Decoding("NowString")).with_desc(format!(
                     "provided string greater (len: {}) than NowString{} size limit",
                     string.len(),
                     Size::SIZE
-                )
-            });
+                )),
+            );
         }
 
         Ok(Self {
