@@ -1,14 +1,15 @@
 /** client connection sequence **/
 mod sub_sm;
 
-use crate::{
-    message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage},
-    sm::{
-        ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionSeqCallbackTrait,
-        ConnectionState, DummyConnectionSM,
-    },
+use crate::message::{AuthType, ChannelName, NowCapset, NowChannelDef, NowMessage};
+use crate::sm::{
+    ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionSeqCallbackTrait,
+    ConnectionState, DummyConnectionSM,
 };
-use std::{cell::RefCell, rc::Rc};
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::vec::Vec;
+use core::cell::RefCell;
 
 pub struct ClientConnectionSeqSM<UserCallback> {
     user_callback: UserCallback,
@@ -73,11 +74,11 @@ where
             ConnectionState::Negotiate => {
                 self.state = ConnectionState::Authenticate;
                 self.authenticate_sm.set_shared_data(Rc::clone(&self.shared_data));
-                std::mem::swap(&mut self.current_sm, &mut self.authenticate_sm);
+                core::mem::swap(&mut self.current_sm, &mut self.authenticate_sm);
 
                 // set invalid authenticate_sm field to dummy connection state machine
                 let mut dummy_sm: Box<dyn ConnectionSM> = Box::new(DummyConnectionSM);
-                std::mem::swap(&mut self.authenticate_sm, &mut dummy_sm);
+                core::mem::swap(&mut self.authenticate_sm, &mut dummy_sm);
 
                 self.user_callback.on_negotiate_completed(&self.shared_data.borrow());
             }

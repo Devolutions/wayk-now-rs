@@ -1,29 +1,36 @@
-use num_derive::FromPrimitive;
-use std::{
-    borrow::{Borrow, Cow},
-    io::{Cursor, Write},
-    str::FromStr,
-};
-use wayk_proto::{
-    container::Vec8,
-    error::Result,
-    message::NowString64,
-    serialization::{Decode, Encode},
-};
+use crate::io::{Cursor, NoStdWrite};
+use alloc::borrow::{Borrow, Cow};
+use alloc::vec::Vec;
+use core::str::FromStr;
+use wayk_proto::container::Vec8;
+use wayk_proto::error::Result;
+use wayk_proto::message::NowString64;
+use wayk_proto::serialization::{Decode, Encode};
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum ChannelMessageType {
-    ChannelListRequest = 0x01,
-    ChannelListResponse = 0x02,
-    ChannelOpenRequest = 0x03,
-    ChannelOpenResponse = 0x04,
-    ChannelCloseRequest = 0x05,
-    ChannelCloseResponse = 0x06,
-    ChannelStartRequest = 0x07,
-    ChannelStartResponse = 0x08,
-    ChannelStopRequest = 0x09,
-    ChannelStopResponse = 0x0a,
+    #[value = 0x01]
+    ChannelListRequest,
+    #[value = 0x02]
+    ChannelListResponse,
+    #[value = 0x03]
+    ChannelOpenRequest,
+    #[value = 0x04]
+    ChannelOpenResponse,
+    #[value = 0x05]
+    ChannelCloseRequest,
+    #[value = 0x06]
+    ChannelCloseResponse,
+    #[value = 0x07]
+    ChannelStartRequest,
+    #[value = 0x08]
+    ChannelStartResponse,
+    #[value = 0x09]
+    ChannelStopRequest,
+    #[value = 0x0a]
+    ChannelStopResponse,
+    #[fallback]
+    Other(u8),
 }
 
 __flags_struct! {
@@ -69,6 +76,13 @@ pub enum ChannelName {
 }
 
 impl Encode for ChannelName {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         let name = match self {
             ChannelName::Unknown(name) => name.borrow(),
@@ -81,7 +95,7 @@ impl Encode for ChannelName {
         name.len() + 2
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         let name = NowString64::from_str(self.as_str())?;
         name.encode_into(writer)?;
         Ok(())
@@ -89,7 +103,7 @@ impl Encode for ChannelName {
 }
 
 impl<'dec: 'a, 'a> Decode<'dec> for ChannelName {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let name = NowString64::decode_from(cursor)?;
         match name.as_str() {
             Self::CLIPBOARD_STR => Ok(Self::Clipboard),
@@ -141,7 +155,8 @@ impl NowChannelMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{message::VirtChannelsCtx, packet::NowPacket};
+    use crate::message::VirtChannelsCtx;
+    use crate::packet::NowPacket;
 
     const CHANNEL_LIST_REQUEST_PACKET: [u8; 72] = [
         0x44, 0x00, 0x06, 0x80, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x4e, 0x6f, 0x77, 0x43, 0x6c, 0x69,
@@ -153,7 +168,7 @@ mod tests {
     #[test]
     fn full_decode() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&CHANNEL_LIST_REQUEST_PACKET[..]);
+        let mut reader = std::io::Cursor::new(&CHANNEL_LIST_REQUEST_PACKET[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {

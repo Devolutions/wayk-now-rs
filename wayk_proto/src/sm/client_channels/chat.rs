@@ -1,12 +1,14 @@
-use crate::{
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
-    message::{
-        ChannelName, ChatCapabilitiesFlags, NowChatMsg, NowChatSyncMsg, NowChatTextMsg, NowString65535,
-        NowVirtualChannel,
-    },
-    sm::{VirtChannelSMResult, VirtualChannelSM},
+use crate::alloc::borrow::ToOwned;
+use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::message::{
+    ChannelName, ChatCapabilitiesFlags, NowChatMsg, NowChatSyncMsg, NowChatTextMsg, NowString65535, NowVirtualChannel,
 };
-use std::{cell::RefCell, rc::Rc, str::FromStr};
+use crate::sm::{VirtChannelSMResult, VirtualChannelSM};
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::String;
+use core::cell::RefCell;
+use core::str::FromStr;
 
 pub type ChatDataRc = Rc<RefCell<ChatData>>;
 pub type TimestampFn = Box<dyn FnMut() -> u32>;

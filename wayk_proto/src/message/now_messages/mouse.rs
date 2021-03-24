@@ -1,14 +1,17 @@
 // NOW_MOUSE_MSG
 
-use num_derive::FromPrimitive;
-
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum MouseMessageType {
-    Position = 0x01,
-    Cursor = 0x02,
-    Mode = 0x03,
-    State = 0x04,
+    #[value = 0x01]
+    Position,
+    #[value = 0x02]
+    Cursor,
+    #[value = 0x03]
+    Mode,
+    #[value = 0x04]
+    State,
+    #[fallback]
+    Other(u8),
 }
 
 __flags_struct! {
@@ -23,26 +26,38 @@ __flags_struct! {
     }
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum MouseCursorType {
-    Mono = 0x00,
-    Color = 0x01,
-    Alpha = 0x02,
+    #[value = 0x00]
+    Mono,
+    #[value = 0x01]
+    Color,
+    #[value = 0x02]
+    Alpha,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum MouseMode {
-    Primary = 0x01,
-    Secondary = 0x02,
-    Disabled = 0x03,
+    #[value = 0x01]
+    Primary,
+    #[value = 0x02]
+    Secondary,
+    #[value = 0x03]
+    Disabled,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum MouseState {
-    Primary = 0x01,
-    Secondary = 0x02,
-    Disabled = 0x03,
+    #[value = 0x01]
+    Primary,
+    #[value = 0x02]
+    Secondary,
+    #[value = 0x03]
+    Disabled,
+    #[fallback]
+    Other(u8),
 }

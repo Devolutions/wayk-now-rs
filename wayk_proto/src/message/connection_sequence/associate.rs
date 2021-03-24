@@ -1,25 +1,30 @@
 // NOW_ASSOCIATE_MSG
 
 use crate::message::status::{AssociateStatusCode, NowStatus};
-use num_derive::FromPrimitive;
 
-#[derive(Decode, Encode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Decode, Encode, Debug, PartialEq, Clone, Copy)]
 pub enum AssociateMessageType {
-    Info = 0x01,
-    Request = 0x02,
-    Response = 0x03,
+    #[value = 0x01]
+    Info,
+    #[value = 0x02]
+    Request,
+    #[value = 0x03]
+    Response,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "AssociateMessageType"]
-pub enum NowAssociateMsg {
+pub enum NowAssociateMsg<'a> {
     Info(NowAssociateInfoMsg),
     Request(NowAssociateRequestMsg),
     Response(NowAssociateResponseMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
-impl NowAssociateMsg {
+impl NowAssociateMsg<'_> {
     pub fn new_info() -> Self {
         Self::Info(NowAssociateInfoMsg::default())
     }
@@ -40,19 +45,19 @@ impl NowAssociateMsg {
     }
 }
 
-impl From<NowAssociateInfoMsg> for NowAssociateMsg {
+impl From<NowAssociateInfoMsg> for NowAssociateMsg<'_> {
     fn from(msg: NowAssociateInfoMsg) -> Self {
         Self::Info(msg)
     }
 }
 
-impl From<NowAssociateRequestMsg> for NowAssociateMsg {
+impl From<NowAssociateRequestMsg> for NowAssociateMsg<'_> {
     fn from(msg: NowAssociateRequestMsg) -> Self {
         Self::Request(msg)
     }
 }
 
-impl From<NowAssociateResponseMsg> for NowAssociateMsg {
+impl From<NowAssociateResponseMsg> for NowAssociateMsg<'_> {
     fn from(msg: NowAssociateResponseMsg) -> Self {
         Self::Response(msg)
     }

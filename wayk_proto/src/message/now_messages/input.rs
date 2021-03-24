@@ -1,34 +1,45 @@
-use byteorder::ReadBytesExt;
+use crate::io::{Cursor, NoStdWrite};
+use alloc::vec::Vec;
 use core::mem;
-use num_derive::FromPrimitive;
-use std::io::{Cursor, Write};
-use wayk_proto::{
-    container::Vec16,
-    error::*,
-    message::connection_sequence::InputActionCode,
-    serialization::{Decode, Encode},
-};
+use wayk_proto::container::Vec16;
+use wayk_proto::error::*;
+use wayk_proto::message::connection_sequence::InputActionCode;
+use wayk_proto::serialization::{Decode, Encode};
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum InputMessageType {
-    Mouse = 0x01,
-    Scroll = 0x02,
-    Keyboard = 0x03,
-    Unicode = 0x04,
-    Toggle = 0x05,
-    Action = 0x06,
+    #[value = 0x01]
+    Mouse,
+    #[value = 0x02]
+    Scroll,
+    #[value = 0x03]
+    Keyboard,
+    #[value = 0x04]
+    Unicode,
+    #[value = 0x05]
+    Toggle,
+    #[value = 0x06]
+    Action,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum EventMouseFlags {
-    None = 0x0,
-    ButtonLeft = 0x01,
-    ButtonRight = 0x02,
-    ButtonMiddle = 0x04,
-    ButtonX1 = 0x10,
-    ButtonX2 = 0x20,
+    #[value = 0x0]
+    None,
+    #[value = 0x01]
+    ButtonLeft,
+    #[value = 0x02]
+    ButtonRight,
+    #[value = 0x04]
+    ButtonMiddle,
+    #[value = 0x10]
+    ButtonX1,
+    #[value = 0x20]
+    ButtonX2,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Encode, Decode, Clone, Debug)]
@@ -93,11 +104,18 @@ pub struct NowInputEventUnicode {
 }
 
 impl<'a> Encode for NowInputEventUnicode {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         mem::size_of::<u8>() + mem::size_of::<u8>() + self.code.len()
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         self.subtype.encode_into(writer)?;
         let flags = (self.code.len() as u8 - 1) << 6;
         flags.encode_into(writer)?;
@@ -107,7 +125,7 @@ impl<'a> Encode for NowInputEventUnicode {
 }
 
 impl<'dec: 'a, 'a> Decode<'dec> for NowInputEventUnicode {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let _subtype = cursor.read_u8()?;
         let flags = cursor.read_u8()?;
 
@@ -143,13 +161,18 @@ impl NowInputEventUnicode {
     }
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum ToggleEventKeys {
-    ScrollLock = 0x0001,
-    NumLock = 0x0002,
-    CapsLock = 0x0004,
-    KanaLock = 0x0008,
+    #[value = 0x0001]
+    ScrollLock,
+    #[value = 0x0002]
+    NumLock,
+    #[value = 0x0004]
+    CapsLock,
+    #[value = 0x0008]
+    KanaLock,
+    #[fallback]
+    Other(u16),
 }
 
 #[derive(Encode, Decode, Clone, Debug)]
@@ -188,22 +211,24 @@ impl NowInputEventAction {
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "InputMessageType"]
-pub enum InputEvent {
+pub enum InputEvent<'a> {
     Mouse(NowInputEventMouse),
     Scroll(NowInputEventScroll),
     Keyboard(NowInputEventKeyboard),
     Unicode(NowInputEventUnicode),
     Toggle(NowInputEventToggle),
     Action(NowInputEventAction),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[derive(Encode, Decode, Clone, Debug)]
-pub struct NowInputMsg {
-    input_event: Vec16<InputEvent>,
+pub struct NowInputMsg<'a> {
+    input_event: Vec16<InputEvent<'a>>,
 }
 
-impl NowInputMsg {
-    pub fn new_with_events(input_event: Vec<InputEvent>) -> Self {
+impl<'a> NowInputMsg<'a> {
+    pub fn new_with_events(input_event: Vec<InputEvent<'a>>) -> Self {
         Self {
             input_event: Vec16(input_event),
         }
@@ -213,7 +238,8 @@ impl NowInputMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{message::VirtChannelsCtx, packet::NowPacket};
+    use crate::message::VirtChannelsCtx;
+    use crate::packet::NowPacket;
 
     const TOGGLE_EVENT_FULL_PACKET: [u8; 10] = [0x06, 0x00, 0x43, 0x80, 0x01, 0x00, 0x05, 0x00, 0x02, 0x00];
 
@@ -252,7 +278,7 @@ mod tests {
     #[test]
     fn input_event_mouse_decode_full_packet() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&MOUSE_POSITION_EVENT_FULL_PACKET[..]);
+        let mut reader = std::io::Cursor::new(&MOUSE_POSITION_EVENT_FULL_PACKET[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {
@@ -264,9 +290,9 @@ mod tests {
 
     #[test]
     fn input_event_toggle_encode() {
-        let toggle_event = vec![InputEvent::Toggle(NowInputEventToggle::new_with_code(
-            ToggleEventKeys::NumLock as u16,
-        ))];
+        let toggle_event = vec![InputEvent::Toggle(NowInputEventToggle::new_with_code(u16::from(
+            ToggleEventKeys::NumLock,
+        )))];
 
         let packet = NowPacket::from_message(NowInputMsg::new_with_events(toggle_event));
 

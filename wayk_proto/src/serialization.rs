@@ -1,14 +1,24 @@
 use crate::error::ProtoError;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Cursor, Write};
+use crate::io::{Cursor, NoStdWrite};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 
 // === ENCODE ===
 
+pub enum ExpectedSize {
+    Known(usize),
+    Variable,
+}
+
 /// Common interface for encoding
 pub trait Encode {
+    fn expected_size() -> ExpectedSize
+    where
+        Self: Sized;
+
     fn encoded_len(&self) -> usize;
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError>
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError>
     where
         Self: Sized;
 
@@ -16,9 +26,9 @@ pub trait Encode {
     where
         Self: Sized,
     {
-        let mut buf = Cursor::new(Vec::new());
+        let mut buf = Vec::new();
         self.encode_into(&mut buf)?;
-        Ok(buf.into_inner())
+        Ok(buf)
     }
 }
 
@@ -35,7 +45,7 @@ sa::assert_obj_safe!(Encode);
 /// ```
 /// use wayk_proto::serialization::Decode;
 /// use wayk_proto::error::ProtoError;
-/// use std::io::Cursor;
+/// use wayk_proto::io::Cursor;
 ///
 /// // my type that borrows
 /// struct MyType<'a> {
@@ -43,7 +53,7 @@ sa::assert_obj_safe!(Encode);
 /// }
 ///
 /// impl<'dec: 'a, 'a> Decode<'dec> for MyType<'a> {
-///     fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self, ProtoError> {
+///     fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self, ProtoError> {
 ///         unimplemented!()
 ///     }
 /// }
@@ -52,14 +62,14 @@ sa::assert_obj_safe!(Encode);
 /// ```
 /// use wayk_proto::serialization::Decode;
 /// use wayk_proto::error::ProtoError;
-/// use std::io::Cursor;
+/// use wayk_proto::io::Cursor;
 ///
 /// struct MyType<'a> {
 ///     data: &'a [u8],
 /// }
 ///
 /// impl<'dec> Decode<'dec> for MyType<'dec> {
-///     fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self, ProtoError> {
+///     fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self, ProtoError> {
 ///         unimplemented!()
 ///     }
 /// }
@@ -69,7 +79,7 @@ pub trait Decode<'dec>
 where
     Self: Sized,
 {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self, ProtoError>;
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self, ProtoError>;
 
     fn decode(bytes: &'dec [u8]) -> Result<Self, ProtoError> {
         Self::decode_from(&mut Cursor::new(bytes))
@@ -79,171 +89,175 @@ where
 // === implementation for primitive types ===
 
 impl Encode for u8 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
         writer.write_u8(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for u8 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
         cursor.read_u8().map_err(ProtoError::from)
     }
 }
 
 impl Encode for u16 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_u16::<LittleEndian>(*self).map_err(ProtoError::from)
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
+        writer.write_u16(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for u16 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_u16::<LittleEndian>().map_err(ProtoError::from)
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
+        cursor.read_u16().map_err(ProtoError::from)
     }
 }
 
 impl Encode for u32 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_u32::<LittleEndian>(*self).map_err(ProtoError::from)
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
+        writer.write_u32(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for u32 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_u32::<LittleEndian>().map_err(ProtoError::from)
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
+        cursor.read_u32().map_err(ProtoError::from)
     }
 }
 
 impl Encode for u64 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_u64::<LittleEndian>(*self).map_err(ProtoError::from)
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
+        writer.write_u64(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for u64 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_u64::<LittleEndian>().map_err(ProtoError::from)
-    }
-}
-
-impl Encode for u128 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
-    }
-
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_u128::<LittleEndian>(*self).map_err(ProtoError::from)
-    }
-}
-
-impl Decode<'_> for u128 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_u128::<LittleEndian>().map_err(ProtoError::from)
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
+        cursor.read_u64().map_err(ProtoError::from)
     }
 }
 
 impl Encode for i8 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
         writer.write_i8(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for i8 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
         cursor.read_i8().map_err(ProtoError::from)
     }
 }
 
 impl Encode for i16 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_i16::<LittleEndian>(*self).map_err(ProtoError::from)
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
+        writer.write_i16(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for i16 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_i16::<LittleEndian>().map_err(ProtoError::from)
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
+        cursor.read_i16().map_err(ProtoError::from)
     }
 }
 
 impl Encode for i32 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_i32::<LittleEndian>(*self).map_err(ProtoError::from)
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
+        writer.write_i32(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for i32 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_i32::<LittleEndian>().map_err(ProtoError::from)
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
+        cursor.read_i32().map_err(ProtoError::from)
     }
 }
 
 impl Encode for i64 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_i64::<LittleEndian>(*self).map_err(ProtoError::from)
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
+        writer.write_i64(*self).map_err(ProtoError::from)
     }
 }
 
 impl Decode<'_> for i64 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_i64::<LittleEndian>().map_err(ProtoError::from)
-    }
-}
-
-impl Encode for i128 {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
-    }
-
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
-        writer.write_i128::<LittleEndian>(*self).map_err(ProtoError::from)
-    }
-}
-
-impl Decode<'_> for i128 {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
-        cursor.read_i128::<LittleEndian>().map_err(ProtoError::from)
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
+        cursor.read_i64().map_err(ProtoError::from)
     }
 }
 
 impl Encode for [u32; 4] {
-    fn encoded_len(&self) -> usize {
-        std::mem::size_of::<Self>()
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Known(core::mem::size_of::<Self>())
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
+    fn encoded_len(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
         for element in self {
             element.encode_into(writer)?;
         }
@@ -252,22 +266,26 @@ impl Encode for [u32; 4] {
 }
 
 impl Decode<'_> for [u32; 4] {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, ProtoError> {
+    fn decode_from(cursor: &mut Cursor<'_>) -> Result<Self, ProtoError> {
         Ok([
-            cursor.read_u32::<LittleEndian>()?,
-            cursor.read_u32::<LittleEndian>()?,
-            cursor.read_u32::<LittleEndian>()?,
-            cursor.read_u32::<LittleEndian>()?,
+            cursor.read_u32()?,
+            cursor.read_u32()?,
+            cursor.read_u32()?,
+            cursor.read_u32()?,
         ])
     }
 }
 
 impl Encode for &[u8] {
+    fn expected_size() -> ExpectedSize {
+        ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         self.len()
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<(), ProtoError> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<(), ProtoError> {
         writer.write_all(self)?;
         Ok(())
     }
@@ -277,7 +295,7 @@ impl<'dec: 'a, 'a, T: 'a> Decode<'dec> for Box<T>
 where
     T: Decode<'dec>,
 {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self, ProtoError> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self, ProtoError> {
         T::decode_from(cursor).map(Box::new)
     }
 }

@@ -1,12 +1,10 @@
+use crate::channels_manager::{ChannelsManager, ChannelsManagerResult};
+use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::message::NowTerminateMsg;
 /** SHAREE **/
 use crate::message::{NowBody, NowMessage, VirtChannelsCtx};
-use crate::{
-    channels_manager::{ChannelsManager, ChannelsManagerResult},
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
-    message::NowTerminateMsg,
-    packet::NowPacket,
-    sm::{ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc},
-};
+use crate::packet::NowPacket;
+use crate::sm::{ConnectionSM, ConnectionSMResult, ConnectionSMSharedData, ConnectionSMSharedDataRc};
 
 pub type ShareeResult<'a> = Result<Option<NowPacket<'a>>, ProtoError>;
 

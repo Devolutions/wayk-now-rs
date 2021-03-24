@@ -1,11 +1,9 @@
 use crate::config::AuthConfig;
 use std::rc::Rc;
-use wayk_proto::{
-    auth::pfp::NowAuthPFP,
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
-    message::{NowAuthenticateMsg, NowMessage},
-    sm::{ConnectionSM, ConnectionSMResult, ConnectionSMSharedDataRc, ConnectionState},
-};
+use wayk_proto::auth::pfp::NowAuthPFP;
+use wayk_proto::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use wayk_proto::message::{NowAuthenticateMsg, NowMessage};
+use wayk_proto::sm::{ConnectionSM, ConnectionSMResult, ConnectionSMSharedDataRc, ConnectionState};
 
 #[derive(Debug, PartialEq)]
 enum AuthState {

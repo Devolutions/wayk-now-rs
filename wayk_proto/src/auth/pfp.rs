@@ -1,35 +1,41 @@
-use crate::{
-    error::Result,
-    message::{AuthType, NowAuthenticateMsg, NowAuthenticateTokenMsgOwned, NowString256, NowString64},
-    serialization::Encode,
-};
-use num_derive::FromPrimitive;
-use std::str::FromStr;
+use crate::error::Result;
+use crate::message::{AuthType, NowAuthenticateMsg, NowAuthenticateTokenMsgOwned, NowString256, NowString64};
+use crate::serialization::Encode;
+use core::str::FromStr;
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum PFPMessageType {
-    Negotiate = 0x01,
-    Challenge = 0x02,
-    Response = 0x03,
+    #[value = 0x01]
+    Negotiate,
+    #[value = 0x02]
+    Challenge,
+    #[value = 0x03]
+    Response,
+    #[fallback]
+    Other(u16),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum PFPMessageFlags {
-    NoChallenge = 0x0000,
-    Question = 0x0001,
+    #[value = 0x0000]
+    NoChallenge,
+    #[value = 0x0001]
+    Question,
+    #[fallback]
+    Other(u16),
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "PFPMessageType"]
-pub enum NowAuthPFP {
+pub enum NowAuthPFP<'a> {
     Negotiate(NowAuthPFPNegotiate),
     Challenge(NowAuthPFPChallenge),
     Response(NowAuthPFPResponse),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
-impl NowAuthPFP {
+impl NowAuthPFP<'_> {
     pub fn new_owned_negotiate_token<'a>(friendly_name: &str, friendly_text: &str) -> Result<NowAuthenticateMsg<'a>> {
         let negotiate_token = NowAuthPFPNegotiate::new(
             NowString64::from_str(friendly_name)?,
@@ -113,7 +119,7 @@ impl NowAuthPFPResponse {
 mod tests {
     use super::*;
     use crate::serialization::{Decode, Encode};
-    use std::str::FromStr;
+    use core::str::FromStr;
 
     #[rustfmt::skip]
     const PFP_NEGOTIATE_TOKEN: [u8; 26] = [

@@ -1,11 +1,12 @@
 use super::{ConnectionSM, ConnectionSMResult};
-use crate::{
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
-    message::{NowActivateMsg, NowCapabilitiesMsg, NowMessage},
-    sm::{ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionState},
-};
+use crate::alloc::string::ToString;
+use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::message::{NowActivateMsg, NowCapabilitiesMsg, NowMessage};
+use crate::sm::{ConnectionSMSharedData, ConnectionSMSharedDataRc, ConnectionState};
+use alloc::rc::Rc;
+use alloc::vec::Vec;
+use core::cell::RefCell;
 use log::info;
-use std::{cell::RefCell, rc::Rc};
 
 macro_rules! unexpected_call {
     ($sm_struct:ident, $self:ident, $method_name:literal) => {
@@ -97,6 +98,10 @@ impl ConnectionSM for HandshakeSM {
                     HandshakeStatusCode::Incompatible => {
                         ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
                             .or_desc("version incompatible")
+                    }
+                    HandshakeStatusCode::Other(code) => {
+                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
+                            .or_desc(format!("handshake status code: {}", code))
                     }
                 },
                 unexpected => unexpected_msg!(Self, self, unexpected),
@@ -230,7 +235,8 @@ impl ConnectionSM for AssociateSM {
     }
 
     fn update_with_message<'msg: 'a, 'a>(&mut self, msg: &'a NowMessage<'msg>) -> ConnectionSMResult<'msg> {
-        use wayk_proto::message::{status::AssociateStatusCode, NowAssociateMsg};
+        use wayk_proto::message::status::AssociateStatusCode;
+        use wayk_proto::message::NowAssociateMsg;
 
         match &self.state {
             AssociateState::WaitInfo => match msg {
@@ -255,6 +261,10 @@ impl ConnectionSM for AssociateSM {
                     AssociateStatusCode::Failure => {
                         ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
                             .or_desc(format!("Association failed {:?}", msg.status.status_type().to_string()))
+                    }
+                    AssociateStatusCode::Other(code) => {
+                        ProtoError::new(ProtoErrorKind::ConnectionSequence(ConnectionState::Handshake))
+                            .or_desc(format!("Associate status code: {}", code))
                     }
                 },
                 unexpected => unexpected_msg!(Self, self, unexpected),

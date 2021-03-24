@@ -1,15 +1,13 @@
-use crate::{
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
-    message::{
-        ChannelName, ClipboardControlState, ClipboardResponseFlags, NowClipboardCapabilitiesReqMsg,
-        NowClipboardControlReqMsg, NowClipboardControlRspMsg, NowClipboardFormatDataReqMsg,
-        NowClipboardFormatDataRspMsg, NowClipboardFormatListReqMsg, NowClipboardFormatListRspMsg, NowClipboardMsg,
-        NowClipboardResumeReqMsg, NowClipboardResumeRspMsg, NowClipboardSuspendReqMsg, NowClipboardSuspendRspMsg,
-        NowVirtualChannel,
-    },
-    sm::{VirtChannelSMResult, VirtualChannelSM},
+use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::message::{
+    ChannelName, ClipboardControlState, ClipboardResponseFlags, NowClipboardCapabilitiesReqMsg,
+    NowClipboardControlReqMsg, NowClipboardControlRspMsg, NowClipboardFormatDataReqMsg, NowClipboardFormatDataRspMsg,
+    NowClipboardFormatListReqMsg, NowClipboardFormatListRspMsg, NowClipboardMsg, NowClipboardResumeReqMsg,
+    NowClipboardResumeRspMsg, NowClipboardSuspendReqMsg, NowClipboardSuspendRspMsg, NowVirtualChannel,
 };
-use std::{cell::RefCell, rc::Rc};
+use crate::sm::{VirtChannelSMResult, VirtualChannelSM};
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 pub type ClipboardDataRc = Rc<RefCell<ClipboardData>>;
 

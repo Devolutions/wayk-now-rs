@@ -1,6 +1,8 @@
 // NOW_NEGOTIATE_MSG
 
-use crate::{container::Vec8, message::AuthType};
+use crate::container::Vec8;
+use crate::message::AuthType;
+use alloc::vec::Vec;
 
 __flags_struct! {
     NegotiateFlags: u32 => {

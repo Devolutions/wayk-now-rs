@@ -1,23 +1,30 @@
 // Chat
 
 use crate::message::common::now_string::NowString65535;
-use num_derive::FromPrimitive;
 
-#[derive(Encode, Decode, FromPrimitive, Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatMessageType {
-    Sync = 0x00,
-    Text = 0x01,
-    Read = 0x02,
-    Typing = 0x03,
-    Name = 0x04,
-    Status = 0x05,
-    Poke = 0x06,
+    #[value = 0x00]
+    Sync,
+    #[value = 0x01]
+    Text,
+    #[value = 0x02]
+    Read,
+    #[value = 0x03]
+    Typing,
+    #[value = 0x04]
+    Name,
+    #[value = 0x05]
+    Status,
+    #[value = 0x06]
+    Poke,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Encode, Decode, Debug, Clone)]
 #[meta_enum = "ChatMessageType"]
-pub enum NowChatMsg {
+pub enum NowChatMsg<'a> {
     Sync(NowChatSyncMsg),
     Text(NowChatTextMsg),
     Read(NowChatReadMsg),
@@ -25,45 +32,47 @@ pub enum NowChatMsg {
     Name(NowChatNameMsg),
     Status(NowChatStatusMsg),
     Poke(NowChatPokeMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
-impl From<NowChatSyncMsg> for NowChatMsg {
+impl From<NowChatSyncMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatSyncMsg) -> Self {
         Self::Sync(msg)
     }
 }
 
-impl From<NowChatTextMsg> for NowChatMsg {
+impl From<NowChatTextMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatTextMsg) -> Self {
         Self::Text(msg)
     }
 }
 
-impl From<NowChatReadMsg> for NowChatMsg {
+impl From<NowChatReadMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatReadMsg) -> Self {
         Self::Read(msg)
     }
 }
 
-impl From<NowChatTypingMsg> for NowChatMsg {
+impl From<NowChatTypingMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatTypingMsg) -> Self {
         Self::Typing(msg)
     }
 }
 
-impl From<NowChatNameMsg> for NowChatMsg {
+impl From<NowChatNameMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatNameMsg) -> Self {
         Self::Name(msg)
     }
 }
 
-impl From<NowChatStatusMsg> for NowChatMsg {
+impl From<NowChatStatusMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatStatusMsg) -> Self {
         Self::Status(msg)
     }
 }
 
-impl From<NowChatPokeMsg> for NowChatMsg {
+impl From<NowChatPokeMsg> for NowChatMsg<'_> {
     fn from(msg: NowChatPokeMsg) -> Self {
         Self::Poke(msg)
     }
@@ -71,17 +80,26 @@ impl From<NowChatPokeMsg> for NowChatMsg {
 
 // subtypes
 
-#[derive(Encode, Decode, FromPrimitive, Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatPresenceStatus {
-    Unknown = 0x00,
-    Available = 0x01,
-    Away = 0x02,
-    Idle = 0x03,
-    Busy = 0x04,
-    DoNotDisturb = 0x05,
-    Invisible = 0x06,
-    Offline = 0x07,
+    #[value = 0x00]
+    Unknown,
+    #[value = 0x01]
+    Available,
+    #[value = 0x02]
+    Away,
+    #[value = 0x03]
+    Idle,
+    #[value = 0x04]
+    Busy,
+    #[value = 0x05]
+    DoNotDisturb,
+    #[value = 0x06]
+    Invisible,
+    #[value = 0x07]
+    Offline,
+    #[fallback]
+    Other(u8),
 }
 
 __flags_struct! {
@@ -287,12 +305,11 @@ impl NowChatPokeMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        message::{ChannelName, NowBody, NowVirtualChannel, VirtChannelsCtx},
-        packet::NowPacket,
-        serialization::{Decode, Encode},
-    };
-    use std::{io::Cursor, str::FromStr};
+    use crate::message::{ChannelName, NowBody, NowVirtualChannel, VirtChannelsCtx};
+    use crate::packet::NowPacket;
+    use crate::serialization::{Decode, Encode};
+    use core::str::FromStr;
+    use std::io::Cursor;
 
     fn get_ctx() -> VirtChannelsCtx {
         let mut vchan_ctx = VirtChannelsCtx::new();

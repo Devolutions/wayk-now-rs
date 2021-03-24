@@ -1,13 +1,10 @@
-use crate::{
-    error::{ProtoErrorKind, ProtoErrorResultExt, Result},
-    header::{AbstractNowHeader, NowHeader, NowLongHeader},
-    message::{BodyType, MessageType, NowBody, NowMessage, NowVirtualChannel, VirtChannelsCtx},
-    serialization::{Decode, Encode},
-};
-use std::{
-    io::{Cursor, Read, Write},
-    marker::PhantomData,
-};
+use crate::error::{ProtoErrorKind, ProtoErrorResultExt, Result};
+use crate::header::{AbstractNowHeader, NowHeader, NowLongHeader};
+use crate::io::{Cursor, NoStdWrite};
+use crate::message::{BodyType, MessageType, NowBody, NowMessage, NowVirtualChannel, VirtChannelsCtx};
+use crate::serialization::{Decode, Encode};
+use alloc::vec::Vec;
+use core::marker::PhantomData;
 
 /// A raw now packet.
 ///
@@ -23,9 +20,9 @@ pub struct NowRawPacket<'a> {
 sa::assert_impl_all!(NowRawPacket: Sync, Send);
 
 impl<'dec: 'a, 'a> Decode<'dec> for NowRawPacket<'a> {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let header = NowHeader::decode_from(cursor)?;
-        let payload = &cursor.get_ref()[cursor.position() as usize..];
+        let payload = cursor.read_rest()?;
 
         Ok(Self { header, payload })
     }
@@ -43,11 +40,18 @@ pub struct NowPacket<'a> {
 sa::assert_impl_all!(NowPacket: Sync, Send);
 
 impl Encode for NowPacket<'_> {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         self.header.encoded_len() + self.body.encoded_len()
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         self.header.encode_into(writer)?;
         self.body.encode_into(writer)
     }
@@ -84,6 +88,7 @@ impl<'a> NowPacket<'a> {
             NowMessage::System(msg) => NowHeader::new_with_msg_type(MessageType::System, msg.encoded_len() as u32),
             NowMessage::Sharing(msg) => NowHeader::new_with_msg_type(MessageType::Sharing, msg.encoded_len() as u32),
             NowMessage::Access(msg) => NowHeader::new_with_msg_type(MessageType::Access, msg.encoded_len() as u32),
+            NowMessage::Custom { ty, payload } => NowHeader::new_with_msg_type(*ty, payload.len() as u32),
         };
 
         Self {
@@ -102,11 +107,14 @@ impl<'a> NowPacket<'a> {
         }
     }
 
-    pub fn read_from<'dec: 'a, R: Read>(
+    #[cfg(feature = "std")]
+    pub fn read_from<'dec: 'a, R: std::io::Read>(
         reader: &mut R,
         buffer: &'dec mut Vec<u8>,
         channels_ctx: &VirtChannelsCtx,
     ) -> Result<Self> {
+        use std::io::Read;
+
         let header = NowHeader::read_from(reader)?;
         let message_len = header.body_len();
 
@@ -124,7 +132,7 @@ impl<'a> NowPacket<'a> {
         buffer: &'dec [u8],
         channels_ctx: &VirtChannelsCtx,
     ) -> Result<Self> {
-        let mut cursor = Cursor::new(buffer);
+        let mut cursor = Cursor::new(&buffer[..header.body_len()]);
         let body = match header.body_type() {
             BodyType::Message(msg_type) => NowBody::Message(NowMessage::decode_from(msg_type, &mut cursor)?),
             BodyType::VirtualChannel(id) => {
@@ -265,5 +273,37 @@ mod tests {
         acc.purge_old_packets();
         assert_eq!(acc.cursor, 0);
         assert_eq!(acc.buffer.len(), 0);
+    }
+
+    #[rustfmt::skip]
+    const CUSTOM_MESSAGE: [u8; 8] = [
+        // vheader
+        0x04, 0x00, // size
+        0xA7, // subtye
+        0x80, // flags
+
+        // custom payload
+        0x01, 0x02, 0x03, 0x04,
+    ];
+
+    #[test]
+    fn custom_message() {
+        let mut acc = NowPacketAccumulator::new();
+        acc.accumulate(&CUSTOM_MESSAGE);
+        let packet_result = acc.next_packet(&VirtChannelsCtx::new()).unwrap();
+        match packet_result {
+            Ok(packet) => match packet.body {
+                NowBody::Message(NowMessage::Custom { ty: msg_type, payload }) => {
+                    assert_eq!(u8::from(msg_type), 0xA7);
+                    assert_eq!(payload, &[0x01, 0x02, 0x03, 0x04]);
+                }
+                NowBody::Message(_) => panic!("decoded wrong now message from custom packet"),
+                NowBody::VirtualChannel(_) => panic!("decoded a virtual channel message from a custom packet"),
+            },
+            Err(e) => {
+                e.print_trace();
+                panic!("couldn't decode custom packet");
+            }
+        }
     }
 }

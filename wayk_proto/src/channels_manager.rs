@@ -1,8 +1,7 @@
-use crate::{
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt},
-    message::{ChannelName, NowVirtualChannel},
-    sm::VirtualChannelSM,
-};
+use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt};
+use crate::message::{ChannelName, NowVirtualChannel};
+use crate::sm::VirtualChannelSM;
+use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 
 pub type ChannelsManagerResult<'a> = Result<Option<(ChannelName, NowVirtualChannel<'a>)>, ProtoError>;
@@ -13,26 +12,26 @@ pub struct ChannelsManager {
 
 impl Default for ChannelsManager {
     fn default() -> Self {
-        Self::new()
+        Self {
+            state_machines: BTreeMap::new(),
+        }
     }
 }
 
 impl ChannelsManager {
     pub fn new() -> Self {
-        Self {
-            state_machines: BTreeMap::new(),
-        }
+        Self::default()
     }
 
     pub fn with_sm<VirtChanSM>(mut self, state_machine: VirtChanSM) -> Self
     where
         VirtChanSM: VirtualChannelSM + 'static,
     {
-        self.add_channel_sm(state_machine);
+        self.add_sm(state_machine);
         self
     }
 
-    pub fn add_channel_sm<VirtChanSM>(&mut self, state_machine: VirtChanSM) -> Option<Box<dyn VirtualChannelSM>>
+    pub fn add_sm<VirtChanSM>(&mut self, state_machine: VirtChanSM) -> Option<Box<dyn VirtualChannelSM>>
     where
         VirtChanSM: VirtualChannelSM + 'static,
     {

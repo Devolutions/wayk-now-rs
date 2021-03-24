@@ -1,34 +1,49 @@
 // Clipboard
 
-use crate::{
-    container::{Bytes32, Vec32, Vec8},
-    message::NowString256,
-};
-use num_derive::FromPrimitive;
+use crate::container::{Bytes32, Vec32, Vec8};
+use crate::message::NowString256;
+use alloc::vec::Vec;
 
-#[derive(Encode, Decode, FromPrimitive, Debug, Clone, Copy, PartialEq)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, Clone, Copy, PartialEq)]
 pub enum ClipboardMessageType {
-    CapabilitiesReq = 0x01,
-    CapabilitiesRsp = 0x02,
-    ControlReq = 0x03,
-    ControlRsp = 0x04,
-    SuspendReq = 0x05,
-    SuspendRsp = 0x06,
-    ResumeReq = 0x07,
-    ResumeRsp = 0x08,
-    FormatListReq = 0x09,
-    FormatListRsp = 0x0A,
-    FormatDataReq = 0x0B,
-    FormatDataRsp = 0x0C,
+    #[value = 0x01]
+    CapabilitiesReq,
+    #[value = 0x02]
+    CapabilitiesRsp,
+    #[value = 0x03]
+    ControlReq,
+    #[value = 0x04]
+    ControlRsp,
+    #[value = 0x05]
+    SuspendReq,
+    #[value = 0x06]
+    SuspendRsp,
+    #[value = 0x07]
+    ResumeReq,
+    #[value = 0x08]
+    ResumeRsp,
+    #[value = 0x09]
+    FormatListReq,
+    #[value = 0x0A]
+    FormatListRsp,
+    #[value = 0x0B]
+    FormatDataReq,
+    #[value = 0x0C]
+    FormatDataRsp,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, Clone, Copy, PartialEq)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, Clone, Copy, PartialEq)]
 pub enum ClipboardControlState {
-    None = 0x0000,
-    Auto = 0x0001,
-    Manual = 0x0002,
+    #[value = 0x0000]
+    None,
+    #[value = 0x0001]
+    Auto,
+    #[value = 0x0002]
+    Manual,
+    #[fallback]
+    Other(u16),
 }
 
 __flags_struct! {
@@ -64,6 +79,8 @@ pub enum NowClipboardMsg<'a> {
     FormatListRsp(NowClipboardFormatListRspMsg),
     FormatDataReq(NowClipboardFormatDataReqMsg),
     FormatDataRsp(NowClipboardFormatDataRspMsg<'a>),
+    #[fallback]
+    Custom(&'a [u8]),
 
     #[decode_ignore]
     FormatDataRspOwned(NowClipboardFormatDataRspMsgOwned),
@@ -479,11 +496,9 @@ impl NowClipboardFormatDataRspMsgOwned {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        message::{ChannelName, NowBody, NowVirtualChannel, VirtChannelsCtx},
-        packet::NowPacket,
-        serialization::{Decode, Encode},
-    };
+    use crate::message::{ChannelName, NowBody, NowVirtualChannel, VirtChannelsCtx};
+    use crate::packet::NowPacket;
+    use crate::serialization::{Decode, Encode};
     use std::io::Cursor;
 
     fn get_ctx() -> VirtChannelsCtx {

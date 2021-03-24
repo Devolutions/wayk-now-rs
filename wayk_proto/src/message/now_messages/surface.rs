@@ -1,13 +1,7 @@
-use crate::{
-    container::Vec8,
-    error::{ProtoErrorKind, ProtoErrorResultExt, Result},
-    message::EdgeRect,
-    serialization::{Decode, Encode},
-};
-use byteorder::ReadBytesExt;
+use crate::container::Vec8;
+use crate::message::EdgeRect;
+use alloc::vec::Vec;
 use core::mem;
-use num_derive::FromPrimitive;
-use std::io::{Cursor, Seek, SeekFrom, Write};
 
 __flags_struct! {
     SurfaceResponseFlags: u8 => {
@@ -15,15 +9,22 @@ __flags_struct! {
     }
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SurfaceMessageType {
-    ListReq = 0x01,
-    ListRsp = 0x02,
-    MapReq = 0x03,
-    MapRsp = 0x04,
-    SelectReq = 0x05,
-    SelectRsp = 0x06,
+    #[value = 0x01]
+    ListReq,
+    #[value = 0x02]
+    ListRsp,
+    #[value = 0x03]
+    MapReq,
+    #[value = 0x04]
+    MapRsp,
+    #[value = 0x05]
+    SelectReq,
+    #[value = 0x06]
+    SelectRsp,
+    #[fallback]
+    Other(u8),
 }
 
 // NOW_SURFACE_DEF
@@ -45,13 +46,18 @@ impl Default for SurfacePropertiesFlags {
     }
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SurfaceOrientation {
-    Landscape = 0,
-    Portrait = 90,
-    LandscapeFlipped = 180,
-    PortraitFlipped = 270,
+    #[value = 0]
+    Landscape,
+    #[value = 90]
+    Portrait,
+    #[value = 180]
+    LandscapeFlipped,
+    #[value = 270]
+    PortraitFlipped,
+    #[fallback]
+    Other(u16),
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
@@ -139,125 +145,50 @@ impl NowSurfaceMap {
 
 // NOW_SURFACE_MSG
 
-#[derive(Debug, Clone)]
-pub enum NowSurfaceMsg {
+#[derive(Encode, Decode, Debug, Clone)]
+#[meta_enum = "SurfaceMessageType"]
+pub enum NowSurfaceMsg<'a> {
     ListReq(NowSurfaceListReqMsg),
     ListRsp(NowSurfaceListRspMsg),
     MapReq(NowSurfaceMapReqMsg),
     MapRsp(NowSurfaceMapRspMsg),
     SelectReq(NowSurfaceSelectReqMsg),
     SelectRsp(NowSurfaceSelectRspMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
-impl Encode for NowSurfaceMsg {
-    fn encoded_len(&self) -> usize {
-        match self {
-            NowSurfaceMsg::ListReq(msg) => msg.encoded_len(),
-            NowSurfaceMsg::ListRsp(msg) => msg.encoded_len(),
-            NowSurfaceMsg::MapReq(msg) => msg.encoded_len(),
-            NowSurfaceMsg::MapRsp(msg) => msg.encoded_len(),
-            NowSurfaceMsg::SelectReq(msg) => msg.encoded_len(),
-            NowSurfaceMsg::SelectRsp(msg) => msg.encoded_len(),
-        }
-    }
-
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
-        match self {
-            NowSurfaceMsg::ListReq(msg) => msg
-                .encode_into(writer)
-                .chain(ProtoErrorKind::Encoding(stringify!(NowSurfaceMsg)))
-                .or_desc("couldn't encode list request message"),
-            NowSurfaceMsg::ListRsp(msg) => msg
-                .encode_into(writer)
-                .chain(ProtoErrorKind::Encoding(stringify!(NowSurfaceMsg)))
-                .or_desc("couldn't encode list response message"),
-            NowSurfaceMsg::MapReq(msg) => msg
-                .encode_into(writer)
-                .chain(ProtoErrorKind::Encoding(stringify!(NowSurfaceMsg)))
-                .or_desc("couldn't encode map request message"),
-            NowSurfaceMsg::MapRsp(msg) => msg
-                .encode_into(writer)
-                .chain(ProtoErrorKind::Encoding(stringify!(NowSurfaceMsg)))
-                .or_desc("couldn't encode map response message"),
-            NowSurfaceMsg::SelectReq(msg) => msg
-                .encode_into(writer)
-                .chain(ProtoErrorKind::Encoding(stringify!(NowSurfaceMsg)))
-                .or_desc("couldn't encode select request message"),
-            NowSurfaceMsg::SelectRsp(msg) => msg
-                .encode_into(writer)
-                .chain(ProtoErrorKind::Encoding(stringify!(NowSurfaceMsg)))
-                .or_desc("couldn't encode select response message"),
-        }
-    }
-}
-
-impl Decode<'_> for NowSurfaceMsg {
-    fn decode_from(cursor: &mut Cursor<&[u8]>) -> Result<Self> {
-        let subtype = num::FromPrimitive::from_u8(cursor.read_u8()?)
-            .chain(ProtoErrorKind::Decoding(stringify!(NowSurfaceMsg)))
-            .or_desc("invalid subtype")?;
-        cursor.seek(SeekFrom::Current(-1)).unwrap(); // cannot fail
-
-        match subtype {
-            SurfaceMessageType::ListReq => NowSurfaceListReqMsg::decode_from(cursor)
-                .map(Self::ListReq)
-                .chain(ProtoErrorKind::Decoding(stringify!(NowSurfaceMsg)))
-                .or_desc("invalid list request message"),
-            SurfaceMessageType::ListRsp => NowSurfaceListRspMsg::decode_from(cursor)
-                .map(Self::ListRsp)
-                .chain(ProtoErrorKind::Decoding(stringify!(NowSurfaceMsg)))
-                .or_desc("invalid list response message"),
-            SurfaceMessageType::MapReq => NowSurfaceMapReqMsg::decode_from(cursor)
-                .map(Self::MapReq)
-                .chain(ProtoErrorKind::Decoding(stringify!(NowSurfaceMsg)))
-                .or_desc("invalid map request message"),
-            SurfaceMessageType::MapRsp => NowSurfaceMapRspMsg::decode_from(cursor)
-                .map(Self::MapRsp)
-                .chain(ProtoErrorKind::Decoding(stringify!(NowSurfaceMsg)))
-                .or_desc("invalid map response message"),
-            SurfaceMessageType::SelectReq => NowSurfaceSelectReqMsg::decode_from(cursor)
-                .map(Self::SelectReq)
-                .chain(ProtoErrorKind::Decoding(stringify!(NowSurfaceMsg)))
-                .or_desc("invalid select request message"),
-            SurfaceMessageType::SelectRsp => NowSurfaceSelectRspMsg::decode_from(cursor)
-                .map(Self::SelectRsp)
-                .chain(ProtoErrorKind::Decoding(stringify!(NowSurfaceMsg)))
-                .or_desc("invalid select response message"),
-        }
-    }
-}
-
-impl From<NowSurfaceListReqMsg> for NowSurfaceMsg {
+impl From<NowSurfaceListReqMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceListReqMsg) -> Self {
         Self::ListReq(msg)
     }
 }
 
-impl From<NowSurfaceListRspMsg> for NowSurfaceMsg {
+impl From<NowSurfaceListRspMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceListRspMsg) -> Self {
         Self::ListRsp(msg)
     }
 }
 
-impl From<NowSurfaceMapReqMsg> for NowSurfaceMsg {
+impl From<NowSurfaceMapReqMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceMapReqMsg) -> Self {
         Self::MapReq(msg)
     }
 }
 
-impl From<NowSurfaceMapRspMsg> for NowSurfaceMsg {
+impl From<NowSurfaceMapRspMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceMapRspMsg) -> Self {
         Self::MapRsp(msg)
     }
 }
 
-impl From<NowSurfaceSelectReqMsg> for NowSurfaceMsg {
+impl From<NowSurfaceSelectReqMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceSelectReqMsg) -> Self {
         Self::SelectReq(msg)
     }
 }
 
-impl From<NowSurfaceSelectRspMsg> for NowSurfaceMsg {
+impl From<NowSurfaceSelectRspMsg> for NowSurfaceMsg<'_> {
     fn from(msg: NowSurfaceSelectRspMsg) -> Self {
         Self::SelectRsp(msg)
     }
@@ -418,6 +349,7 @@ impl NowSurfaceSelectRspMsg {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serialization::{Decode, Encode};
 
     #[rustfmt::skip]
     const SURFACE_LIST_REQ_MSG: [u8; 25] = [

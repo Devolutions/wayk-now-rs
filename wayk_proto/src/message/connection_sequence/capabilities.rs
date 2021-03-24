@@ -1,13 +1,12 @@
-use crate::{
-    container::Vec8,
-    error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt, Result},
-    message::{MouseMode, NowString, NowString64, NowSurfaceListReqMsg, NowSystemOsInfo},
-    serialization::{Decode, Encode},
-};
-use byteorder::{LittleEndian, ReadBytesExt};
-use core::{convert::TryFrom, mem};
-use num_derive::FromPrimitive;
-use std::io::{Cursor, Write};
+use crate::container::Vec8;
+use crate::error::{ProtoError, ProtoErrorKind, ProtoErrorResultExt, Result};
+use crate::io::{Cursor, NoStdWrite};
+use crate::message::{MouseMode, NowString, NowString64, NowSurfaceListReqMsg, NowSystemOsInfo};
+use crate::serialization::{Decode, Encode};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
+use core::mem;
 
 // NOW_SURFACE_CAPSET
 
@@ -35,22 +34,32 @@ impl SurfaceCapset {
 
 // NOW_UPDATE_CAPSET
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum Codec {
-    Unspecified = 0x0000,
-    Thor = 0x0001,
-    JPEG = 0x0002,
-    GFWX = 0x0003,
+    #[value = 0x0000]
+    Unspecified,
+    #[value = 0x0001]
+    Thor,
+    #[value = 0x0002]
+    JPEG,
+    #[value = 0x0003]
+    GFWX,
+    #[fallback]
+    Other(u16),
 }
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum QualityMode {
-    Unspecified = 0x00,
-    Low = 0x01,
-    Medium = 0x02,
-    High = 0x03,
+    #[value = 0x00]
+    Unspecified,
+    #[value = 0x01]
+    Low,
+    #[value = 0x02]
+    Medium,
+    #[value = 0x03]
+    High,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Debug, Clone, Decode, Encode)]
@@ -67,10 +76,14 @@ impl NowCodecDef {
 
     pub fn new_with_flags(codec_id: Codec, flags: u32) -> Self {
         Self {
-            size: mem::size_of::<NowCodecDef>() as u16,
+            size: Self::size() as u16,
             id: codec_id,
             flags,
         }
+    }
+
+    pub fn size() -> usize {
+        8
     }
 }
 
@@ -112,21 +125,34 @@ impl UpdateCapset {
 
 // NOW_INPUT_CAPSET
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum InputActionCode {
-    SAS = 0x0001,
-    ClipboardCut = 0x0010,
-    ClipboardCopy = 0x0011,
-    ClipboardPaste = 0x0012,
-    ClipboardCopySpecial = 0x0013,
-    ClipboardPasteSpecial = 0x0014,
-    SelectAll = 0x0015,
-    Undo = 0x0016,
-    Redo = 0x0017,
-    Shutdown = 0x0020,
-    Reboot = 0x0021,
-    RebootSafe = 0x0022,
+    #[value = 0x0001]
+    SAS,
+    #[value = 0x0010]
+    ClipboardCut,
+    #[value = 0x0011]
+    ClipboardCopy,
+    #[value = 0x0012]
+    ClipboardPaste,
+    #[value = 0x0013]
+    ClipboardCopySpecial,
+    #[value = 0x0014]
+    ClipboardPasteSpecial,
+    #[value = 0x0015]
+    SelectAll,
+    #[value = 0x0016]
+    Undo,
+    #[value = 0x0017]
+    Redo,
+    #[value = 0x0020]
+    Shutdown,
+    #[value = 0x0021]
+    Reboot,
+    #[value = 0x0022]
+    RebootSafe,
+    #[fallback]
+    Other(u16),
 }
 
 __flags_struct! {
@@ -207,15 +233,22 @@ impl MouseCapset {
 
 // NOW_ACCESS_CAPSET
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u16)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum AccessControlCode {
-    Viewing = 0x0001,
-    Interact = 0x0002,
-    Clipboard = 0x0003,
-    FileTransfer = 0x0004,
-    Exec = 0x0005,
-    Chat = 0x0006,
+    #[value = 0x0001]
+    Viewing,
+    #[value = 0x0002]
+    Interact,
+    #[value = 0x0003]
+    Clipboard,
+    #[value = 0x0004]
+    FileTransfer,
+    #[value = 0x0005]
+    Exec,
+    #[value = 0x0006]
+    Chat,
+    #[fallback]
+    Other(u16),
 }
 
 __flags_struct! {
@@ -314,15 +347,15 @@ __flags_struct! {
 }
 
 #[derive(Debug, Clone)]
-pub struct SystemCapset {
+pub struct SystemCapset<'a> {
     pub flags: SystemCapsetFlags,
-    pub os_info: Option<NowSystemOsInfo>,
+    pub os_info: Option<NowSystemOsInfo<'a>>,
 }
 
-impl SystemCapset {
+impl<'a> SystemCapset<'a> {
     const NAME: &'static str = "NowSystem";
 
-    pub fn new_os_info(os_info: NowSystemOsInfo) -> Self {
+    pub fn new_os_info(os_info: NowSystemOsInfo<'a>) -> Self {
         Self {
             flags: SystemCapsetFlags::new_empty().set_os_info(),
             os_info: Some(os_info),
@@ -330,7 +363,14 @@ impl SystemCapset {
     }
 }
 
-impl Encode for SystemCapset {
+impl Encode for SystemCapset<'_> {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         let os_info_len = if let Some(os_info) = &self.os_info {
             os_info.encoded_len()
@@ -341,7 +381,7 @@ impl Encode for SystemCapset {
         self.flags.encoded_len() + os_info_len
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         self.flags.encode_into(writer)?;
         if let Some(os_info) = &self.os_info {
             os_info.encode_into(writer)?;
@@ -350,8 +390,8 @@ impl Encode for SystemCapset {
     }
 }
 
-impl<'dec: 'a, 'a> Decode<'dec> for SystemCapset {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+impl<'dec: 'a, 'a> Decode<'dec> for SystemCapset<'a> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let flags = SystemCapsetFlags::decode_from(cursor)?;
         let os_info = if flags.os_info() {
             Some(NowSystemOsInfo::decode_from(cursor)?)
@@ -373,11 +413,18 @@ pub struct UnknownCapset<'a> {
 }
 
 impl<'a> Encode for UnknownCapset<'a> {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         mem::size_of::<u16>() + self.name.encoded_len() + self.data.len()
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         self.size.encode_into(writer)?;
         self.name.encode_into(writer)?;
         for byte in self.data {
@@ -388,11 +435,11 @@ impl<'a> Encode for UnknownCapset<'a> {
 }
 
 impl<'dec: 'a, 'a> Decode<'dec> for UnknownCapset<'a> {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
-        let size = cursor.read_u16::<LittleEndian>()?;
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
+        let size = cursor.read_u16()?;
 
         let name = NowString::decode_from(cursor)
-            .chain(ProtoErrorKind::Decoding(stringify!(UnknownCapset)))
+            .chain(ProtoErrorKind::Decoding(__type_str!(UnknownCapset)))
             .or_desc("invalid capset name now string 64")?;
 
         let start_inclusive = cursor.position() as usize;
@@ -420,7 +467,7 @@ pub enum NowCapset<'a> {
     Input(InputCapset),
     Mouse(MouseCapset),
     //TODO: Network(NetworkCapset),
-    System(Box<SystemCapset>), // size difference is large...
+    System(Box<SystemCapset<'a>>),
 }
 
 impl NowCapset<'_> {
@@ -451,7 +498,7 @@ macro_rules! encode_capset_variant {
 
         let size = u16::try_from($capset.encoded_len() + name.encoded_len() + mem::size_of::<u16>())
             .map_err(ProtoError::from)
-            .chain(ProtoErrorKind::Encoding(stringify!(NowCapset)))
+            .chain(ProtoErrorKind::Encoding(__type_str!(NowCapset)))
             .or_desc("capset data too large for the size field")?;
 
         size.encode_into($writer)?;
@@ -461,6 +508,13 @@ macro_rules! encode_capset_variant {
 }
 
 impl<'a> Encode for NowCapset<'a> {
+    fn expected_size() -> crate::serialization::ExpectedSize
+    where
+        Self: Sized,
+    {
+        crate::serialization::ExpectedSize::Variable
+    }
+
     fn encoded_len(&self) -> usize {
         match self {
             NowCapset::Unknown(capset) => capset.encoded_len(),
@@ -475,32 +529,32 @@ impl<'a> Encode for NowCapset<'a> {
         }
     }
 
-    fn encode_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn encode_into<W: NoStdWrite>(&self, writer: &mut W) -> Result<()> {
         match self {
             NowCapset::Unknown(capset) => capset.encode_into(writer)?,
             NowCapset::Transport(capset) => {
-                encode_capset_variant! {capset, TransportCapset, writer}
+                encode_capset_variant! { capset, TransportCapset, writer }
             }
             NowCapset::Surface(capset) => {
-                encode_capset_variant! {capset, SurfaceCapset, writer}
+                encode_capset_variant! { capset, SurfaceCapset, writer }
             }
             NowCapset::License(capset) => {
-                encode_capset_variant! {capset, LicenseCapset, writer}
+                encode_capset_variant! { capset, LicenseCapset, writer }
             }
             NowCapset::Access(capset) => {
-                encode_capset_variant! {capset, AccessCapset, writer}
+                encode_capset_variant! { capset, AccessCapset, writer }
             }
             NowCapset::Update(capset) => {
-                encode_capset_variant! {capset, UpdateCapset, writer}
+                encode_capset_variant! { capset, UpdateCapset, writer }
             }
             NowCapset::Input(capset) => {
-                encode_capset_variant! {capset, InputCapset, writer}
+                encode_capset_variant! { capset, InputCapset, writer }
             }
             NowCapset::Mouse(capset) => {
-                encode_capset_variant! {capset, MouseCapset, writer}
+                encode_capset_variant! { capset, MouseCapset, writer }
             }
             NowCapset::System(capset) => {
-                encode_capset_variant! {capset, SystemCapset, writer}
+                encode_capset_variant! { capset, SystemCapset, writer }
             }
         }
 
@@ -509,7 +563,7 @@ impl<'a> Encode for NowCapset<'a> {
 }
 
 impl<'dec: 'a, 'a> Decode<'dec> for NowCapset<'a> {
-    fn decode_from(cursor: &mut Cursor<&'dec [u8]>) -> Result<Self> {
+    fn decode_from(cursor: &mut Cursor<'dec>) -> Result<Self> {
         let size = u16::decode_from(cursor)?;
         let name = NowString64::decode_from(cursor)?;
         match name.as_str() {
@@ -548,13 +602,10 @@ impl<'a> NowCapabilitiesMsg<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        message::{
-            EdgeRect, NowString128, NowString16, NowString32, NowString64, NowSurfaceDef, OsArch, OsType,
-            VirtChannelsCtx,
-        },
-        packet::NowPacket,
+    use crate::message::{
+        EdgeRect, NowString128, NowString16, NowString32, NowString64, NowSurfaceDef, OsArch, OsType, VirtChannelsCtx,
     };
+    use crate::packet::NowPacket;
     use core::str::FromStr;
 
     #[rustfmt::skip]
@@ -649,7 +700,7 @@ mod tests {
     #[test]
     fn full_decode() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&CAPABILITIES_PACKET[..]);
+        let mut reader = std::io::Cursor::new(&CAPABILITIES_PACKET[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {
@@ -662,7 +713,7 @@ mod tests {
     #[test]
     fn full_decode_windows() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&CAPABILITIES_WINDOWS_ARCH_PACKET[..]);
+        let mut reader = std::io::Cursor::new(&CAPABILITIES_WINDOWS_ARCH_PACKET[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {
@@ -906,7 +957,7 @@ mod tests {
     #[test]
     fn full_decode_packet_without_os_info() {
         let mut buffer = Vec::new();
-        let mut reader = Cursor::new(&PACKET_WITHOUT_OS_INFO[..]);
+        let mut reader = std::io::Cursor::new(&PACKET_WITHOUT_OS_INFO[..]);
         match NowPacket::read_from(&mut reader, &mut buffer, &VirtChannelsCtx::new()) {
             Ok(_) => {}
             Err(e) => {

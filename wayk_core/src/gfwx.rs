@@ -1,5 +1,6 @@
+use core::convert::TryFrom;
+use core::fmt;
 use gfwx::{Encoder, Filter, Header, Intent, Quantization};
-use num_derive::FromPrimitive;
 use wayk_proto_derive::{Decode, Encode};
 
 #[derive(Debug, Clone)]
@@ -13,25 +14,34 @@ pub struct NowGfwxParams {
     pub metadata_size: u32,
 }
 
-#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq, FromPrimitive)]
-#[repr(u8)]
+#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq)]
 pub enum NowGWFXFilter {
-    Linear = 0,
-    Cubic = 1,
+    #[value = 0]
+    Linear,
+    #[value = 1]
+    Cubic,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq, FromPrimitive)]
-#[repr(u8)]
+#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq)]
 pub enum NowGWFXQuantization {
-    Scalar = 0,
+    #[value = 0]
+    Scalar,
+    #[fallback]
+    Other(u8),
 }
 
-#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq, FromPrimitive)]
-#[repr(u8)]
+#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq)]
 pub enum NowGWFXEncoder {
-    Turbo = 0,
-    Fast = 1,
-    Contextual = 2,
+    #[value = 0]
+    Turbo,
+    #[value = 1]
+    Fast,
+    #[value = 2]
+    Contextual,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Encode, Decode, Clone, Debug)]
@@ -58,36 +68,54 @@ pub struct NowGfwxHeader {
     pub color_flags: u32,
 }
 
-impl From<NowGWFXFilter> for Filter {
-    fn from(now_gfwx_filter: NowGWFXFilter) -> Filter {
+#[derive(Debug, Clone, Copy)]
+pub struct UnsupportedGfwxOption;
+
+impl fmt::Display for UnsupportedGfwxOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unsupported GFWX option")
+    }
+}
+
+impl TryFrom<NowGWFXFilter> for Filter {
+    type Error = UnsupportedGfwxOption;
+
+    fn try_from(now_gfwx_filter: NowGWFXFilter) -> Result<Filter, Self::Error> {
         match now_gfwx_filter {
-            NowGWFXFilter::Linear => Filter::Linear,
-            NowGWFXFilter::Cubic => Filter::Cubic,
+            NowGWFXFilter::Linear => Ok(Filter::Linear),
+            NowGWFXFilter::Cubic => Ok(Filter::Cubic),
+            NowGWFXFilter::Other(_) => Err(UnsupportedGfwxOption),
         }
     }
 }
 
-impl From<NowGWFXQuantization> for Quantization {
-    fn from(now_gfwx_quantization: NowGWFXQuantization) -> Quantization {
+impl TryFrom<NowGWFXQuantization> for Quantization {
+    type Error = UnsupportedGfwxOption;
+
+    fn try_from(now_gfwx_quantization: NowGWFXQuantization) -> Result<Quantization, Self::Error> {
         match now_gfwx_quantization {
-            NowGWFXQuantization::Scalar => Quantization::Scalar,
+            NowGWFXQuantization::Scalar => Ok(Quantization::Scalar),
+            NowGWFXQuantization::Other(_) => Err(UnsupportedGfwxOption),
         }
     }
 }
 
-impl From<NowGWFXEncoder> for Encoder {
-    fn from(now_gfwx_encoder: NowGWFXEncoder) -> Encoder {
+impl TryFrom<NowGWFXEncoder> for Encoder {
+    type Error = UnsupportedGfwxOption;
+
+    fn try_from(now_gfwx_encoder: NowGWFXEncoder) -> Result<Encoder, Self::Error> {
         match now_gfwx_encoder {
-            NowGWFXEncoder::Turbo => Encoder::Turbo,
-            NowGWFXEncoder::Fast => Encoder::Fast,
-            NowGWFXEncoder::Contextual => Encoder::Contextual,
+            NowGWFXEncoder::Turbo => Ok(Encoder::Turbo),
+            NowGWFXEncoder::Fast => Ok(Encoder::Fast),
+            NowGWFXEncoder::Contextual => Ok(Encoder::Contextual),
+            NowGWFXEncoder::Other(_) => Err(UnsupportedGfwxOption),
         }
     }
 }
 
 impl NowGfwxHeader {
-    pub fn to_gfwx_header_with_params(&self, params: NowGfwxParams) -> Header {
-        Header {
+    pub fn to_gfwx_header_with_params(&self, params: NowGfwxParams) -> Result<Header, UnsupportedGfwxOption> {
+        Ok(Header {
             version: params.version,
             width: self.image_width,
             height: self.image_height,
@@ -98,9 +126,9 @@ impl NowGfwxHeader {
             quality: self.quality_level,
             chroma_scale: self.chroma_scale,
             block_size: self.block_size,
-            filter: Filter::from(self.filter),
-            quantization: Quantization::from(self.quantization),
-            encoder: Encoder::from(self.encoder),
+            filter: Filter::try_from(self.filter)?,
+            quantization: Quantization::try_from(self.quantization)?,
+            encoder: Encoder::try_from(self.encoder)?,
             intent: params.intent,
             metadata_size: params.metadata_size,
             channel_size: self.image_width as usize * self.image_height as usize,
@@ -108,7 +136,7 @@ impl NowGfwxHeader {
                 * self.image_height as usize
                 * params.layers as usize
                 * params.channels as usize,
-        }
+        })
     }
 }
 
@@ -200,7 +228,9 @@ mod tests {
 
     #[test]
     fn header_decode() {
-        let header = EXPECTED_NOW_GFWX_HEADER.to_gfwx_header_with_params(NOW_GFWX_PARAMS);
+        let header = EXPECTED_NOW_GFWX_HEADER
+            .to_gfwx_header_with_params(NOW_GFWX_PARAMS)
+            .unwrap();
 
         assert_eq!(header.version, HEADER.version);
         assert_eq!(header.width, HEADER.width);

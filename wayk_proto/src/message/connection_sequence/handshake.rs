@@ -1,9 +1,7 @@
 // NOW_HANDSHAKE_MSG
 
-use crate::{
-    message::status::{HandshakeStatusCode, NowStatus},
-    version::{WAYK_NOW_VERSION_MAJOR, WAYK_NOW_VERSION_MINOR, WAYK_NOW_VERSION_PATCH},
-};
+use crate::message::status::{HandshakeStatusCode, NowStatus};
+use crate::version::{WAYK_NOW_VERSION_MAJOR, WAYK_NOW_VERSION_MINOR, WAYK_NOW_VERSION_PATCH};
 
 __flags_struct! {
     HanshakeFlags: u32 => {

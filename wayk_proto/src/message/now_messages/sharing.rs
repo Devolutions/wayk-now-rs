@@ -1,12 +1,14 @@
 use crate::message::NowString256;
-use num_derive::FromPrimitive;
-use std::str::FromStr;
+use core::str::FromStr;
 
-#[derive(Encode, Decode, FromPrimitive, Debug, PartialEq, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, PartialEq, Clone, Copy)]
 pub enum SharingMessageType {
-    Suspend = 0x01,
-    Resume = 0x02,
+    #[value = 0x01]
+    Suspend,
+    #[value = 0x02]
+    Resume,
+    #[fallback]
+    Other(u8),
 }
 
 #[derive(Encode, Decode, Debug, Clone)]
@@ -52,16 +54,18 @@ pub struct NowSharingResumeMsg {
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[meta_enum = "SharingMessageType"]
-pub enum NowSharingMsg {
+pub enum NowSharingMsg<'a> {
     Suspend(NowSharingSuspendMsg),
     Resume(NowSharingResumeMsg),
+    #[fallback]
+    Custom(&'a [u8]),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::serialization::{Decode, Encode};
-    use std::str::FromStr;
+    use core::str::FromStr;
 
     #[rustfmt::skip]
     const NOW_SHARING_SUSPEND_MSG: [u8; 6] = [

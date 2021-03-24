@@ -1,10 +1,9 @@
 // Exec
 
-use num_derive::FromPrimitive;
-
-#[derive(Encode, Decode, FromPrimitive, Debug, Clone, Copy)]
-#[repr(u8)]
+#[derive(Encode, Decode, Debug, Clone, Copy)]
 pub enum ExecMessageType {
-    CapsetReq = 0x00,
-    // TODO: ExecMessageType enum
+    #[value = 0x00]
+    CapsetReq,
+    #[fallback]
+    Other(u8),
 }
