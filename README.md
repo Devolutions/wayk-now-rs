@@ -1,6 +1,6 @@
 Wayk Now Rust
 =============
-
+Test
 [![dependency status](https://deps.rs/repo/github/devolutions/wayk-now-rs/status.svg)](https://deps.rs/repo/github/devolutions/wayk-now-rs)
 
 Collection of Rust crates for Wayk Now.
